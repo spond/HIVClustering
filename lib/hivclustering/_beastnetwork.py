@@ -1,7 +1,13 @@
+
+
 import datetime, time, random
 from math import log
 from copy import copy
+import hypy as hy
+import os
+import csv
 
+__all__ = ['edge', 'patient', 'transmission_network', 'parseAEH', 'parseLANL', 'parsePlain']
 #-------------------------------------------------------------------------------
 
 
@@ -103,8 +109,11 @@ class edge:
 			return -1
 		return 1
 		
-	def check_date (self, year):
-		return (self.date1 == None or self.date1.tm_year <= year) and (self.date2 == None or self.date2.tm_year <= year) 
+	def check_date (self, year, newer = False):
+		if newer:
+			return (self.date1 == None or self.date1.tm_year >= year) and (self.date2 == None or self.date2.tm_year >= year) 		
+		else:
+			return (self.date1 == None or self.date1.tm_year <= year) and (self.date2 == None or self.date2.tm_year <= year) 
 		
 	def __lt__ (self, other):
 		return self.__comp__ (other) == -1
@@ -257,6 +266,19 @@ class transmission_network:
 		self.adjacency_list = None
 		self.sequence_ids = {} # this will store unique sequence ids keyed by edge information (pid and date)
 		
+	def read_from_csv_file (self,file_name, formatter = None, distance_cut = None):
+		if formatter is None:
+			formatter = parseAEH
+		edgeReader = csv.reader(file_name)
+		header = next(edgeReader)
+		if len (header) != 3:
+			raise IOError ('transmission_network.read_from_csv_file() : Expected a .csv file with 3 columns as input')
+		for line in edgeReader:
+			distance = float(line[2])
+			if distance_cut is not None and distance > distance_cut:
+				continue
+			self.add_an_edge(line[0],line[1],distance,formatter)	
+	
 	def insert_patient (self, id, date, add_degree):
 		pat = patient (id)
 		if pat not in self.nodes:
@@ -346,30 +368,33 @@ class transmission_network:
 		
 		return {'edges': edges, 'nodes': len(vis_nodes)}
 				
-			
-	def apply_date_filter	 (self, edge_year):
+	def clear_adjacency (self):
 		if self.adjacency_list != None:
 			del self.adjacency_list
-			self.adjacency_list = None
+			self.adjacency_list = None	
+			for edge in self.edges:
+				edge.visible = True
+
+		
+	def apply_date_filter	 (self, edge_year, newer = False, do_clear = True):
+		if do_clear : self.clear_adjacency()
+		for edge in self.edges:
+			if edge.visible:
+				edge.visible = edge.check_date (edge_year, newer)
+			
+	def apply_distance_filter (self, distance, do_clear = True):
+		if do_clear : self.clear_adjacency()
 			
 		for edge in self.edges:
-			edge.visible = edge.check_date (edge_year)
-			
-	def apply_distance_filter (self, distance):
-		if self.adjacency_list != None:
-			del self.adjacency_list
-			self.adjacency_list = None
-			
-		for edge in self.edges:
-			edge.visible = self.edges[edge] <= distance
+			if edge.visible:
+				edge.visible = self.edges[edge] <= distance
 	
-	def apply_id_filter (self, list):
-		if self.adjacency_list != None:
-			del self.adjacency_list
-			self.adjacency_list = None
+	def apply_id_filter (self, list, do_clear = True):
+		if do_clear : self.clear_adjacency()
 			
 		for edge in self.edges:
-			edge.visible = edge.p1.id in list or edge.p2.id in list
+			if edge.visible:
+				edge.visible = edge.p1.id in list or edge.p2.id in list
 
 	def apply_cluster_filter (self, cluster_ids): # exclude all sequences in a given cluster(s)
 		if self.adjacency_list != None:
@@ -417,7 +442,6 @@ class transmission_network:
 		if node.cluster_id == None:
 			cluster_id [0] += 1
 			node.cluster_id = cluster_id [0]
-			
 		if node in self.adjacency_list:
 			for neighbor_node in self.adjacency_list[node]:
 				if neighbor_node.cluster_id == None:
@@ -483,7 +507,7 @@ class transmission_network:
 					if an_edge in self.edges:
 						a_row.append (str(self.edges[an_edge]))
 					else:
-						print "%s %s not an edge" % (node, node2)
+						print ("%s %s not an edge" % (node, node2))
 						a_row.append ('100.0')
 				else:
 					a_row.append ('0.0')
@@ -492,17 +516,53 @@ class transmission_network:
 			file.write ('\t'.join (a_row))
 			file.write ('\n')
 
-	def get_node_degree (self):
-		if node in self.nodes:
-			if node in self.adjacency_list:
-				return len (self.adjacency_list[node])
-		return 0
+	def get_node_degree_list (self, year_cap = None):
+		degree_list = {}
+		for node in self.nodes:
+			if year_cap is not None and node.get_baseline_date() > year_cap:
+					degree_list[node.id] = None
+			else:
+				if node in self.adjacency_list:
+					degree_list[node.id] = len (self.adjacency_list[node])	
+				else:
+					degree_list[node.id] = 0
+				
+		return degree_list
 		
 	def sample_subset	(self, size):
 		return random.sample (self.nodes, int (size))
 		
 	def output_sequence_names (self):
 		pass
+		
+
+	def fit_degree_distribution (self):
+		hy_instance = hy.HyphyInterface ();
+		script_path = os.path.realpath(__file__)
+		hbl_path =  os.path.join(os.path.dirname(script_path), "data", "HBL", "DegreeDistributions.bf")
+		all_deg = self.get_degree_distribution()
+		hy_instance.queuevar ('allDegs', all_deg)
+		hy_instance.runqueue (batchfile = hbl_path)
+		bestDistro = hy_instance.getvar ('BestDistro',hy.HyphyInterface.STRING)
+		rho = {}
+		bic = {}
+		p = {}
+		for name in ('Waring', 'Yule', 'Pareto', 'Negative Binomial'):
+			try:
+				rho[name] = hy_instance.getvar (name,hy.HyphyInterface.NUMBER)
+			except:
+				rho[name] = None
+			try:
+				bic[name] = hy_instance.getvar (name + "_BIC",hy.HyphyInterface.NUMBER)
+			except:
+				bic[name] = None
+			try:
+				p[name] = hy_instance.getvar (name + "_p",hy.HyphyInterface.NUMBER)
+			except:
+				p[name] = None
+		return {'Best' : bestDistro, 'rho': rho, 'BIC' : bic, 'p' : p}
+
+
 		
 	def get_degree_distribution (self, **kwargs):
 
@@ -524,7 +584,7 @@ class transmission_network:
 		if 'storenodes' in kwargs:
 			per_node = kwargs['storenodes']
 			
-		if self.adjacency_list == None or (directed and isinstance(self.adjacency_list[self.adjacency_list.keys()[0]][0],patient)) or (not directed and isinstance(self.adjacency_list[self.adjacency_list.keys()[0]][0],edge)):
+		if self.adjacency_list == None or (directed and isinstance(self.adjacency_list[list(self.adjacency_list.keys())[0]][0],patient)) or (not directed and isinstance(self.adjacency_list[list(self.adjacency_list.keys())[0]][0],edge)):
 			#print 'Redo'
 			self.compute_adjacency(directed)
 			

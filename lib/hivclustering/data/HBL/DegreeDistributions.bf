@@ -165,7 +165,7 @@ x1 :< 1e26;
 
 Optimize (res, likeFuncPareto(degreeCounts,x1));
 fprintf (stdout, "\n\nPareto:\nLog(L) = ", res[1][0], "\nBIC = ", -res[1][0]*2 + Log(totalNon0) * res[1][1], "\np = ", x1,"\n");
-_degree_fit_results ["Pareto"] = {"logL" : res[1][0], "BIC": -res[1][0]*2 + Log(totalNon0) * res[1][1], "rho": p};
+_degree_fit_results ["Pareto"] = {"logL" : res[1][0], "BIC": -res[1][0]*2 + Log(totalNon0) * res[1][1], "rho": x1};
 
 function _THyPhyAskFor(key)
 {
@@ -185,14 +185,20 @@ function _THyPhyAskFor(key)
         return bestDistro;
     }
     
+    if ((key $ "_BIC$" )[0] > 0)
+    {
+        return (_degree_fit_results[key[0][Abs(key)-5]])["BIC"];
+    }
+    
+    if (key == "Waring_p")
+    {
+        return (_degree_fit_results[key[0][Abs(key)-3]])["p"];
+    }
+    
     if (key == "Waring" || key == "Yule" || key == "Pareto")
     {
     	return (_degree_fit_results[key])["rho"];
     }
     
-    if (key == "Negative Binomial")
-    {
-    	return 0.0;
-    }
     return "_THyPhy_NOT_HANDLED_";
 }
