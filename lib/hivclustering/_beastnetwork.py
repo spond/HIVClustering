@@ -389,12 +389,15 @@ class transmission_network:
 			if edge.visible:
 				edge.visible = self.edges[edge] <= distance
 	
-	def apply_id_filter (self, list, do_clear = True):
+	def apply_id_filter (self, list, strict = False, do_clear = True):
 		if do_clear : self.clear_adjacency()
 			
 		for edge in self.edges:
 			if edge.visible:
-				edge.visible = edge.p1.id in list or edge.p2.id in list
+			    if strict:
+				    edge.visible = edge.p1.id in list and edge.p2.id in list			    
+			    else:
+				    edge.visible = edge.p1.id in list or edge.p2.id in list
 
 	def apply_cluster_filter (self, cluster_ids): # exclude all sequences in a given cluster(s)
 		if self.adjacency_list != None:
