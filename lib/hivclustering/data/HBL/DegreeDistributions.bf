@@ -93,14 +93,53 @@ totalNon0 = 0;
 maxD	  = 0;
 degreeCounts = {};
 
+/*allDegs = {"0":132,
+"1":77,
+"2":26,
+"3":15,
+"4":26,
+"5":23,
+"6":2,
+"7":0,
+"8":2,
+"9":0,
+"10":1,
+"11":3,
+"12":2,
+"13":4,
+"14":3,
+"15":0,
+"16":0,
+"17":1,
+"18":0,
+"19":0,
+"20":0,
+"21":0,
+"22":0,
+"23":0,
+"24":0,
+"25":0,
+"26":0,
+"27":0,
+"28":0,
+"29":0,
+"30":0,
+"31":0,
+"32":0,
+"33":0,
+"34":1,
+"35":0,
+"36":0,
+"37":0,
+"38":1};*/
 
-for (k = 1; k < Abs(allDegs); k += 1)
+for (k = 0; k < Abs(allDegs); k += 1)
 {
 	if (allDegs[k] > 0)
 	{
-		degreeCounts[k] += allDegs[k];
+		degreeCounts[k+1] += allDegs[k];
 		totalNon0 += allDegs[k];
-		maxD	   = Max (maxD, k);
+		maxD	   = Max (maxD, k+1);
 	}
 }
 
@@ -135,7 +174,7 @@ x2 = 0;
 Optimize (res, likeFuncWaring(degreeCounts,x1,x2));
 fprintf (stdout, "\n\nWaring:\nLog(L) = ", res[1][0], "\nBIC = ", -res[1][0]*2 + Log(totalNon0) * res[1][1], "\nrho = ", x1, "\np = ", (x1-2)/(x1+x2-1), "\n");
 
-_degree_fit_results ["Waring"] = {"logL" : res[1][0], "BIC": -res[1][0]*2 + Log(totalNon0) * res[1][1], "rho": x1, "p": (x1-2)/(x1+x2-1)};
+_degree_fit_results ["Waring"] = {"logL" : res[1][0], "BIC": -res[1][0]*2 + Log(totalNon0) * res[1][1], "rho": x1, "p": (x1-2)/(x1+x2-1), "x1" : x1, "x2" : x2};
 
 x2 := 0;
 x1 :> 0;
@@ -193,6 +232,11 @@ function _THyPhyAskFor(key)
     if (key == "Waring_p")
     {
         return (_degree_fit_results[key[0][Abs(key)-3]])["p"];
+    }
+    
+    if (key == "Waring_PDF") {
+        res = {Abs(allDegs),1};
+        return res["Exp(waringDensity(_MATRIX_ELEMENT_ROW_+1,"+(_degree_fit_results ["Waring"])["x1"]+","+(_degree_fit_results ["Waring"])["x2"]+"))"];
     }
     
     if (key == "Waring" || key == "Yule" || key == "Pareto")
