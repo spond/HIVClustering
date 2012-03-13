@@ -13,7 +13,7 @@ __all__ = ['edge', 'patient', 'transmission_network', 'parseAEH', 'parseLANL', '
 
 def parseAEH (str):
     try:
-        bits = str.split ('|')
+        bits = str.rstrip().split ('|')
         if len (bits) < 2:
             raise Exception ('Improperly formatted AEH header (need at least "ID|Sample date in mmddyyyy format": %s' % str)
         
@@ -29,7 +29,7 @@ def parseAEH (str):
     
 def parseLANL (str):
     try:
-        bits = str.split ('_')
+        bits = str.rstrip().split ('_')
         if len (bits) < 4:
             raise Exception ('Improperly formatted LANL header (need at least "subtype_country_accession_yyyy": %s' % str)
         
