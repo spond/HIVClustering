@@ -79,6 +79,7 @@ class edge:
             self.attribute.add (attribute)
 
     def compute_direction (self):
+    # returns the node FROM which the edge is pointing AWAY
         if self.date1 and self.date2:
             if self.p2.edi and time.mktime(self.p2.edi) - time.mktime(self.date1) >= 30*24*3600:
                 return self.p1
@@ -255,8 +256,10 @@ class patient:
     def add_naive (self, naive):
         self.naive = naive
         
-    def get_baseline_date (self):
-        return min ([k.tm_year for k in self.dates])
+    def get_baseline_date (self, complete = False):
+        if complete:
+            return min (self.dates)
+        return min ([k.tm_year for k in self.dates if k is not None])
         
     def get_sample_count (self):
         return len(self.dates)
@@ -318,7 +321,7 @@ class transmission_network:
         self.adjacency_list = None
         self.sequence_ids = {} # this will store unique sequence ids keyed by edge information (pid and date)
         
-    def read_from_csv_file (self,file_name, formatter = None, distance_cut = None, default_attribute = None):
+    def read_from_csv_file (self,file_name, formatter = None, distance_cut = None, default_attribute = None, bootstrap_mode = False):
         if formatter is None:
             formatter = parseAEH
         edgeReader = csv.reader(file_name)
@@ -329,7 +332,7 @@ class transmission_network:
             distance = float(line[2])
             if distance_cut is not None and distance > distance_cut:
                 continue
-            self.add_an_edge(line[0],line[1],distance,formatter,default_attribute)    
+            self.add_an_edge(line[0],line[1],distance,formatter,default_attribute,bootstrap_mode)    
     
     def insert_patient (self, id, date, add_degree, attributes):
         pat = patient (id)
@@ -372,8 +375,22 @@ class transmission_network:
                 if pat == anEdge.p2 or pat == anEdge.p1:
                     list_of_nodes.add (anEdge)
         return list_of_nodes
-        
-    def add_an_edge (self, id1, id2, distance, header_parser = None, edge_attribute = None):        
+
+    def summarize_bootstrap (self):
+        edge_support = {}
+        for edge in self.edges:
+            pair = (edge.p1, edge.p2)
+            if pair not in edge_support:
+                edge_support[pair] = set()
+            edge_support[pair].update (edge.attribute)
+            
+        for k in edge_support:
+            edge_support[k] = len (edge_support[k])
+            
+        return edge_support
+            
+
+    def add_an_edge (self, id1, id2, distance, header_parser = None, edge_attribute = None, bootstrap_mode = False):        
         if header_parser == None:
             header_parser = parseAEH
             
@@ -398,10 +415,11 @@ class transmission_network:
             #    print new_edge
             
             if new_edge not in self.edges:
-                self.edges [new_edge] = distance
+                if not bootstrap_mode or edge_attribute is None: 
+                    self.edges [new_edge] = distance
             else:    
                 if edge_attribute is not None:
-                    print ('Existing distance %s:%g' % (new_edge,self.edges [new_edge]))
+                    #print ('Existing distance %s:%g' % (new_edge,self.edges [new_edge]))
                     for k in self.edges:   
                         if k == new_edge:
                             k.update_attributes (edge_attribute)
@@ -422,7 +440,7 @@ class transmission_network:
                     processed = False
                     for an_edge in self.adjacency_list [anEdge.p1]:
                         if an_edge.p1 == anEdge.p1 and an_edge.p2 == anEdge.p2:
-                            if an_edge > edge: #existing is "greater", replace
+                            if an_edge > anEdge: #existing is "greater", replace
                                 self.adjacency_list[anEdge.p1].remove (an_edge)
                                 self.adjacency_list[anEdge.p2].remove (an_edge)
                             else:
@@ -472,7 +490,7 @@ class transmission_network:
                 edge_set.add ((edge.p1, edge.p2))
 
         
-        return {'edges': len(edge_set), 'nodes': len(vis_nodes), 'total_edges': edge_count, 'multiple_dates':multiple_samples, 'total_sequences': len(vis_nodes) + sum([k[0] for k in multiple_samples]) - len(multiple_samples) }
+        return {'edges': len(edge_set), 'nodes': len(vis_nodes), 'total_edges': edge_count, 'multiple_dates':[[k[0],k[1].days] for k in multiple_samples], 'total_sequences': len(vis_nodes) + sum([k[0] for k in multiple_samples]) - len(multiple_samples) }
                 
     def clear_adjacency (self):
         if self.adjacency_list is not None:
@@ -531,6 +549,21 @@ class transmission_network:
     def clear_filters           (self):
         for edge in self.edges:
             edge.visible = True
+        
+    def cluster_size_by_node (self):
+        if self.adjacency_list == None:
+            self.compute_adjacency ()
+        self.compute_clusters()
+        clusters     = self.retrieve_clusters ()   
+        size_by_node = {}
+        for c in clusters:
+            if c is not None:
+                for node in clusters[c]:
+                    size_by_node[node] = len(clusters[c])
+        for node in self.nodes:
+            if node not in size_by_node:
+                size_by_node[node] = 1
+        return size_by_node
         
             
     def compute_clusters (self, singletons = False):
@@ -619,35 +652,41 @@ class transmission_network:
         file.write ("\n};")
         return directed
 
-    def spool_pairwise_distances (self,file):
-        for node in self.nodes:
-            a_row = []
-            for node2 in self.nodes:
-                if node != node2:
-                    an_edge = edge (node, node2, None, None, True)
-                    
-                    if an_edge in self.edges:
-                        a_row.append (str(self.edges[an_edge]))
-                    else:
-                        print ("%s %s not an edge" % (node, node2))
-                        a_row.append ('100.0')
-                else:
-                    a_row.append ('0.0')
-                    
-            #print a_row
-            file.write ('\t'.join (a_row))
+    def spool_pairwise_distances (self,file,baseline = False):
+        file.write (','.join (['Seq1','Seq2','Distance']))
+        file.write ('\n')
+        for ext_edge in self.edges:
+            if baseline:
+                 if ext_edge.p1.get_baseline_date (True) != ext_edge.date1 or ext_edge.p2.get_baseline_date (True) != ext_edge.date2: 
+                    continue
+            file.write (','.join ([ext_edge.p1.id, ext_edge.p2.id, str(self.edges[ext_edge])]))
             file.write ('\n')
 
-    def get_node_degree_list (self, year_cap = None):
+    def get_node_degree_list (self, year_cap = None, do_direction = False):
         degree_list = {}
+        self.clear_adjacency()
+        self.compute_adjacency(do_direction)
         for node in self.nodes:
             if year_cap is not None and node.get_baseline_date() > year_cap:
-                    degree_list[node.id] = None
+                    degree_list[node] = None
             else:
                 if node in self.adjacency_list:
-                    degree_list[node.id] = len (self.adjacency_list[node])    
+                    if do_direction:
+                        degs = [0,0,0,0] # undir, out-edges, in-edges
+                        for e in self.adjacency_list[node]:
+                            dir = e.compute_direction()
+                            if dir is None:
+                                degs[0] += 1
+                            elif dir == node:
+                                degs[1] += 1
+                            else:
+                                degs[2] += 1
+                        degs[3] = sum (degs[:3])
+                        degree_list[node] = degs
+                    else:
+                        degree_list[node] = len (self.adjacency_list[node])    
                 else:
-                    degree_list[node.id] = 0
+                    degree_list[node] = 0 if not do_direction else [0,0,0,0]
                 
         return degree_list
         

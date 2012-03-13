@@ -1,4 +1,5 @@
-harmonicNumbers = {};
+harmonicNumbers    = {};
+genHarmonicNumbers = {};
 
 function logfactorial (k)
 {
@@ -9,6 +10,11 @@ function logfactorial (k)
 	}
 	return f;
 }
+
+//--------------------------------------------------
+// Start densities
+//--------------------------------------------------
+
 
 function waringDensity (x, rho, phi)
 {
@@ -35,6 +41,24 @@ function paretoDensity (x, p)
 		harmonicNumbers[p] = +hsn;
 	}
 	return x^(-p)/hsn;
+}
+
+function LogZipfMandelbrotDensity (x, q, s)
+{
+	return -s*Log(x+q);
+}
+
+//--------------------------------------------------
+// end densities
+//--------------------------------------------------
+
+function likeFuncZipfMandelbrot (data, a, b)
+{
+	logL = 0;	
+	maxD = 0;
+	data["sumupZipfMandelbrot"][""];
+	maxD = {1,maxD}["Exp(LogZipfMandelbrotDensity(_MATRIX_ELEMENT_COLUMN_+1,a,b))"];
+	return logL - Log(+maxD);
 }
 
 function likeFuncWaring (data, a, b)
@@ -68,6 +92,14 @@ function likeFuncNB (data, a, b)
 function sumupWaring (key, value)
 {
 	logL += (0+value) * waringDensity (0 + key, a, b);
+	return 0;
+}
+
+function sumupZipfMandelbrot (key, value)
+{
+    xval = 0 + key;
+    maxD = Max (maxD, xval);
+	logL += (0+value) * LogZipfMandelbrotDensity (xval, a, b);
 	return 0;
 }
 

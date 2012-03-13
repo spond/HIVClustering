@@ -4,7 +4,6 @@ import csv, argparse, sys, datetime, time, random, os.path
 from scipy import stats
 from hivclustering import *
 
-
 #-------------------------------------------------------------------------------		
 
 def import_edi (file):
@@ -248,3 +247,5 @@ print ("Best distribution is '%s' with rho = %g" % (distro_fit['Best'], distro_f
 
 for dname,rho in distro_fit['rho'].items():
 	print ("%s : rho = %s, BIC = %s, p = %s" % (dname, 'N/A' if rho is None else "%5.2f" % (rho) , 'N/A' if distro_fit["BIC"][dname] is None else "%7.2f" % distro_fit["BIC"][dname], 'N/A' if distro_fit["p"][dname] is None else "%4.2f" % (distro_fit["p"][dname])))
+
+network.generate_dot (settings.dot)
