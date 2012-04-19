@@ -23,7 +23,7 @@ function waringDensity (x, rho, phi)
 
 function yuleDensity (x, a)
 {
-	return Log (a) + Log (Beta(x, a+1));
+	return Log (a-1) + LnGamma (x) + LnGamma (a) - LnGamma (x+a);
 }
 
 function negBinomDensity (x, p, r)
@@ -125,45 +125,8 @@ totalNon0 = 0;
 maxD	  = 0;
 degreeCounts = {};
 
-/*allDegs = {"0":132,
-"1":77,
-"2":26,
-"3":15,
-"4":26,
-"5":23,
-"6":2,
-"7":0,
-"8":2,
-"9":0,
-"10":1,
-"11":3,
-"12":2,
-"13":4,
-"14":3,
-"15":0,
-"16":0,
-"17":1,
-"18":0,
-"19":0,
-"20":0,
-"21":0,
-"22":0,
-"23":0,
-"24":0,
-"25":0,
-"26":0,
-"27":0,
-"28":0,
-"29":0,
-"30":0,
-"31":0,
-"32":0,
-"33":0,
-"34":1,
-"35":0,
-"36":0,
-"37":0,
-"38":1};*/
+//allDegs = {"0": 43, "1": 6, "2": 6, "3": 1, "4": 3};
+
 
 for (k = 0; k < Abs(allDegs); k += 1)
 {
@@ -201,12 +164,15 @@ _degree_fit_results = {};
 x1 = 3;
 x2 = 0;
 
+
+
 //VERBOSITY_LEVEL = 10;
+
 
 Optimize (res, likeFuncWaring(degreeCounts,x1,x2));
 fprintf (stdout, "\n\nWaring:\nLog(L) = ", res[1][0], "\nBIC = ", -res[1][0]*2 + Log(totalNon0) * res[1][1], "\nrho = ", x1, "\np = ", (x1-2)/(x1+x2-1), "\n");
-
 _degree_fit_results ["Waring"] = {"logL" : res[1][0], "BIC": -res[1][0]*2 + Log(totalNon0) * res[1][1], "rho": x1, "p": (x1-2)/(x1+x2-1), "x1" : x1, "x2" : x2};
+
 
 x2 := 0;
 x1 :> 0;
@@ -214,7 +180,6 @@ Optimize (res, likeFuncYule(degreeCounts,x1));
 fprintf (stdout, "\n\nYule:\nLog(L) = ", res[1][0], "\nBIC = ", -res[1][0]*2 + Log(totalNon0) * res[1][1], "\nrho = ", x1, "\n");
 
 _degree_fit_results ["Yule"] = {"logL" : res[1][0], "BIC": -res[1][0]*2 + Log(totalNon0) * res[1][1], "rho": x1};
-
 
 x1 :< 1;
 x1 :> 0;
@@ -228,11 +193,6 @@ _degree_fit_results ["Negative Binomial"] = {"logL" : res[1][0], "BIC": -res[1][
 
 x1 :> 0;
 x1 :< 1e26;
-
-/*for (z = 1; z < 3; z += 0.1)
-{
-	fprintf (stdout, z, ":", likeFuncPareto (degreeCounts, z), "\n");
-}*/
 
 Optimize (res, likeFuncPareto(degreeCounts,x1));
 fprintf (stdout, "\n\nPareto:\nLog(L) = ", res[1][0], "\nBIC = ", -res[1][0]*2 + Log(totalNon0) * res[1][1], "\np = ", x1,"\n");

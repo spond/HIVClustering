@@ -1,7 +1,6 @@
 #!/usr/bin/env python3.2
 
 import csv, argparse, sys, datetime, time, random, os.path
-from scipy import stats
 from hivclustering import *
 
 #-------------------------------------------------------------------------------		
@@ -94,19 +93,7 @@ def degree_to_list (deg,shift = False):
 			listed.append(k + (1 if shift else 0))
 	return listed
 	
-#-------------------------------------------------------------------------------		
 
-def compare_degrees (deg1, deg2, do_convert = True, shift = False):
-	if (do_convert):
-		d1 = degree_to_list(deg1, shift)
-		d2 = degree_to_list(deg2, shift)
-	else:
-		d1 = deg1
-		d2 = deg2
-	
-	print (sum(d1)/float(len(d1)), sum(d2)/float(len(d2)))
-	return stats.mannwhitneyu (d1,d2)
-	
 
 #-------------------------------------------------------------------------------		
 
@@ -119,7 +106,7 @@ arguments.add_argument('-d', '--dot',   help = 'Output DOT file for GraphViz (or
 arguments.add_argument('-c', '--cluster', help = 'Output a CSV file with cluster assignments for each sequence', required = True)
 arguments.add_argument('-t', '--threshold', help = 'Only count edges where the distance is less than this threshold')
 arguments.add_argument('-e', '--edi',   help = 'A .csv file with EDI dates')
-arguments.add_argument('-f', '--format',   help = 'Sequence ID format. One of AEH (ID | sample_date | otherfiels default), LANL (e.g. B_HXB2_K03455_1983 : subtype_country_id_year -- could have more fields), plain (treat as sequence ID only, no meta)')
+arguments.add_argument('-f', '--format',   help = 'Sequence ID format. One of AEH (ID | sample_date | otherfiels default), LANL (e.g. B_HXB2_K03455_1983 : subtype_country_id_year -- could have more fields), plain (treat as sequence ID only, no meta)', choices = ('AEH', 'LANL', 'plain'), default = 'AEH')
 arguments.add_argument('-x', '--exclude',   help = 'Exclude any sequence which belongs to a cluster containing a "reference" strain, defined by the year of isolation. The value of this argument is an integer year (e.g. 1983) so that any sequence isolated in or before that year (e.g. <=1983) is considered to be a lab strain. This option makes sense for LANL or AEH data.')
 
 settings = arguments.parse_args()
@@ -246,6 +233,6 @@ distro_fit = network.fit_degree_distribution ()
 print ("Best distribution is '%s' with rho = %g" % (distro_fit['Best'], distro_fit['rho'][distro_fit['Best']]))
 
 for dname,rho in distro_fit['rho'].items():
-	print ("%s : rho = %s, BIC = %s, p = %s" % (dname, 'N/A' if rho is None else "%5.2f" % (rho) , 'N/A' if distro_fit["BIC"][dname] is None else "%7.2f" % distro_fit["BIC"][dname], 'N/A' if distro_fit["p"][dname] is None else "%4.2f" % (distro_fit["p"][dname])))
+	print ("%s\n\trho = %s\n\tBIC = %s\n\tp   = %s" % (dname, 'N/A' if rho is None else "%5.2f" % (rho) , 'N/A' if distro_fit["BIC"][dname] is None else "%7.2f" % distro_fit["BIC"][dname], 'N/A' if distro_fit["p"][dname] is None else "%4.2f" % (distro_fit["p"][dname])))
 
 network.generate_dot (settings.dot)

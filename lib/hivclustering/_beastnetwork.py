@@ -55,6 +55,10 @@ def parsePlain (str):
 def tm_to_datetime (tm_object):
     return datetime.datetime (tm_object.tm_year, tm_object.tm_mon, tm_object.tm_mday)
 
+def describe_vector (vector):
+    vector.sort()
+    l = len (vector)
+    return {'count': l, 'min': vector[0], 'max': vector[-1], 'median':  vector [l//2] if l % 2 == 1 else 0.5*(vector[l//2-1]+vector[l//2])}
 
 #-------------------------------------------------------------------------------
 
@@ -257,9 +261,17 @@ class patient:
         self.naive = naive
         
     def get_baseline_date (self, complete = False):
+        if self.dates[0] is None:
+            return None
+            
         if complete:
             return min (self.dates)
         return min ([k.tm_year for k in self.dates if k is not None])
+
+    def get_latest_date (self, complete = False):
+        if complete:
+            return max (self.dates)
+        return max ([k.tm_year for k in self.dates if k is not None])
         
     def get_sample_count (self):
         return len(self.dates)
@@ -332,7 +344,68 @@ class transmission_network:
             distance = float(line[2])
             if distance_cut is not None and distance > distance_cut:
                 continue
-            self.add_an_edge(line[0],line[1],distance,formatter,default_attribute,bootstrap_mode)    
+            self.add_an_edge(line[0],line[1],distance,formatter,default_attribute,bootstrap_mode)  
+            
+    def sample_from_network (self, how_many_nodes = 100, how_many_edges = None):
+        if how_many_edges is not None:
+            if how_many_edges >= len (self.edges):
+                return self                
+            subset_network = transmission_network()
+            sampled_edges = random.sample (list(self.edges), how_many_edges)
+            for an_edge in sampled_edges:
+                subset_network.add_an_edge (an_edge.p1.id, an_edge.p2.id, self.edges[an_edge], header_parser = parsePlain)
+            return subset_network
+                
+    
+        if how_many_nodes >= len (self.nodes):
+            return self
+            
+        subset_network = transmission_network()
+        nodes = random.sample (list(self.nodes), how_many_nodes)
+        
+        for a_node in nodes:
+            this_node = self.nodes[a_node]
+            subset_network.insert_patient (this_node.id, this_node.dates[0], False, None)
+            
+        for an_edge in self.edges:
+            if an_edge.p1 in subset_network.nodes and an_edge.p2 in subset_network.nodes:
+                subset_network.add_an_edge (an_edge.p1.id, an_edge.p2.id, self.edges[an_edge], header_parser = parsePlain)
+                
+        return subset_network
+
+    def create_a_random_network (self, network_size = 100):
+        self.insert_patient (1, None, False, None)
+        for node_id in range (2, network_size+1):
+            self.add_an_edge (node_id, random.randint (1, node_id-1), 1, header_parser = parsePlain)
+            
+        return self
+        
+    def create_a_pref_attachment_network (self, network_size = 100):
+        
+        degrees = [0 for k in range(network_size+1)]
+    
+        self.insert_patient (1, None, False, None)
+        self.insert_patient (2, None, False, None)
+        self.add_an_edge (1, 2, 1, header_parser = parsePlain)
+        degrees[1] = 1
+        degrees[2] = 1
+        totalDegrees = 2
+        
+        for node_id in range (3, network_size+1):
+            upto = random.randint (1, totalDegrees)
+            k    = 1
+            sum  = 1
+            
+            while sum < upto:
+                sum += degrees[k]
+                k+=1
+        
+            self.add_an_edge (node_id, k, 1, header_parser = parsePlain)
+            totalDegrees    += 2
+            degrees[node_id] = 1
+            degrees[k]      += 1
+            
+        return self
     
     def insert_patient (self, id, date, add_degree, attributes):
         pat = patient (id)
@@ -364,8 +437,13 @@ class transmission_network:
 
     def has_an_edge        (self, id1, id2): 
         test_edge = edge (patient (id1), patient (id2), None, None, True)
-
         return self.edges[test_edge] if test_edge in self.edges else None
+
+    def has_node_with_id        (self, id): 
+        pat_with_id = patient (id)
+        if pat_with_id in self.nodes:
+            return self.nodes[pat_with_id]
+        return None
 
     def get_all_edges_linking_to_a_node  (self, id1, ignore_visible = False): 
         list_of_nodes = set()
@@ -389,6 +467,7 @@ class transmission_network:
             
         return edge_support
             
+
 
     def add_an_edge (self, id1, id2, distance, header_parser = None, edge_attribute = None, bootstrap_mode = False):        
         if header_parser == None:
@@ -471,6 +550,13 @@ class transmission_network:
                 selection.append (node)
         return selection
         
+    def report_multiple_samples (self, minfo):
+        counts = describe_vector ([k[0] for k in minfo])
+        fup    = describe_vector ([k[1] for k in minfo])
+        
+        return {'count': counts['count'], 'samples' : counts, 'followup' : fup}
+        
+        
     def get_edge_node_count (self):
         vis_nodes = set ()
         edge_set  = set ()
@@ -502,38 +588,49 @@ class transmission_network:
         
     def apply_date_filter     (self, edge_year, newer = False, do_clear = True):
         if do_clear : self.clear_adjacency()
+        vis_count = 0
         for edge in self.edges:
             if edge.visible:
                 edge.visible = edge.check_date (edge_year, newer)
+                vis_count += edge.visible
+        return vis_count
             
     def apply_distance_filter (self, distance, do_clear = True):
         if do_clear : self.clear_adjacency()
-            
+        vis_count = 0
         for edge in self.edges:
             if edge.visible:
                 edge.visible = self.edges[edge] <= distance
+                vis_count += edge.visible
+        return vis_count
     
     def apply_id_filter (self, list, strict = False, do_clear = True):
         if do_clear : self.clear_adjacency()
-            
+        vis_count = 0
         for edge in self.edges:
             if edge.visible:
                 if strict:
                     edge.visible = edge.p1.id in list and edge.p2.id in list                
                 else:
                     edge.visible = edge.p1.id in list or edge.p2.id in list
+                vis_count += edge.visible
+        return vis_count
 
-    def apply_cluster_filter (self, cluster_ids): # exclude all sequences in a given cluster(s)
-        if self.adjacency_list != None:
-            for edge in self.edges:
+    def apply_cluster_filter (self, cluster_ids, exclude = True, do_clear = True): # exclude all sequences in a given cluster(s)
+        if do_clear : self.clear_adjacency()
+        vis_count = 0
+
+        for edge in self.edges:
+            if edge.visible:
                 if edge.p1.cluster_id in cluster_ids or edge.p2.cluster_id in cluster_ids:
-                    edge.visible = False
-                    
-            del self.adjacency_list
-            self.adjacency_list = None
-        else:
-            raise Exception ("Cannot apply a cluster filter because prior to computing clusters IDs")
+                    edge.visible = not exclude
+                else:
+                    edge.visible = exclude
             
+            vis_count += edge.visible
+        
+        return vis_count
+             
 
     def retrieve_clusters (self):
         clusters = {}
@@ -618,6 +715,10 @@ class transmission_network:
             
 
     def generate_dot (self, file, year_vis = None, reduce_edges = True):
+    
+        if self.adjacency_list is None:
+             self.compute_adjacency()
+    
         file.write ('digraph G { overlap="voronoi";\n outputorder = edgesfirst;\nnode[style=filled];\n');
         nodes_drawn = {}
         
@@ -634,7 +735,6 @@ class transmission_network:
                     nodes_drawn[edge.p2] = edge.p2.get_baseline_date()
                     file.write (edge.p2.get_dot_string(year_vis))
                 
-                year_diff = abs(edge.date1.tm_year - edge.date2.tm_year)
                 if isinstance(edge.compute_direction(),type(None)):
                     directed ['undirected'] += 1
                 else:
@@ -706,11 +806,18 @@ class transmission_network:
         return None
         
 
-    def fit_degree_distribution (self):
-        hy_instance = hy.HyphyInterface ();
+    def fit_degree_distribution (self, degree_option = None, hy_instance = None):
+        if hy_instance is None:
+            hy_instance = hy.HyphyInterface ();
         script_path = os.path.realpath(__file__)
         hbl_path =  os.path.join(os.path.dirname(script_path), "data", "HBL", "DegreeDistributions.bf")
-        all_deg = self.get_degree_distribution()
+        if degree_option == 'indegree':
+            all_deg = self.get_degree_distribution(indegree=True)
+        elif degree_option == 'outdegree':
+            all_deg = self.get_degree_distribution(outdegree=True)
+        else:
+            all_deg = self.get_degree_distribution()
+            
         hy_instance.queuevar ('allDegs', all_deg)
         hy_instance.runqueue (batchfile = hbl_path)
         bestDistro = hy_instance.getvar ('BestDistro',hy.HyphyInterface.STRING)
@@ -751,6 +858,15 @@ class transmission_network:
         if 'directed' in kwargs:
             directed = bool (kwargs ['directed'])
             
+        outdegree = False    
+        if 'outdegree' in kwargs:
+            outdegree = bool (kwargs ['outdegree'])
+
+        indegree = False
+        if 'indegree' in kwargs:
+            indegree = bool (kwargs ['indegree'])
+            
+
         per_year_fu = None
         if 'peryear' in kwargs:
             per_year_fu = int (kwargs ['peryear'])
@@ -759,9 +875,9 @@ class transmission_network:
         if 'storenodes' in kwargs:
             per_node = kwargs['storenodes']
             
-        if self.adjacency_list == None or (directed and self.type_of_adjacency_list () == 'patient') or (not directed and self.type_of_adjacency_list () == 'edge'):
+        if self.adjacency_list == None or ((directed or outdegree or indegree) and self.type_of_adjacency_list () == 'patient') or (not (directed or outdegree or indegree) and self.type_of_adjacency_list () == 'edge'):
             #print 'Redo'
-            self.compute_adjacency(directed)
+            self.compute_adjacency(directed or outdegree or indegree)
             
         max_diff    = None
         if 'max_diff' in kwargs and 'directed':
@@ -772,11 +888,20 @@ class transmission_network:
             if subset and node not in subset:
                 continue
                 
-            if directed:
+            if directed or outdegree or indegree:
                 this_degree = 0
                 for an_edge in self.adjacency_list[node]:
                     dir = an_edge.compute_direction()
-                    if isinstance(dir,type(None)) or dir == node:
+                    
+                    connect_me = False
+                    if outdegree: 
+                        connect_me = dir is not None and dir == node
+                    elif indegree:
+                        connect_me = dir is not None and dir != node
+                    else:
+                        connect_me = dir is not None and dir == node
+                    
+                    if connect_me:
                         if max_diff:
                             diff = an_edge.chrono_length_days()
                             if diff == None or diff <= max_diff:
