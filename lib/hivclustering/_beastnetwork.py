@@ -7,7 +7,7 @@ import hypy as hy
 import os
 import csv
 
-__all__ = ['edge', 'patient', 'transmission_network', 'parseAEH', 'parseLANL', 'parsePlain']
+__all__ = ['edge', 'patient', 'transmission_network', 'parseAEH', 'parseLANL', 'parsePlain', 'describe_vector']
 #-------------------------------------------------------------------------------
 
 
@@ -58,7 +58,7 @@ def tm_to_datetime (tm_object):
 def describe_vector (vector):
     vector.sort()
     l = len (vector)
-    return {'count': l, 'min': vector[0], 'max': vector[-1], 'median':  vector [l//2] if l % 2 == 1 else 0.5*(vector[l//2-1]+vector[l//2])}
+    return {'count': l, 'min': vector[0], 'max': vector[-1], 'mean': sum(vector)/l, 'median':  vector [l//2] if l % 2 == 1 else 0.5*(vector[l//2-1]+vector[l//2])}
 
 #-------------------------------------------------------------------------------
 
@@ -82,14 +82,38 @@ class edge:
         if attribute is not None:
             self.attribute.add (attribute)
 
-    def compute_direction (self):
+    def compute_direction (self, return_diff = False, min_days = 30):
     # returns the node FROM which the edge is pointing AWAY
         if self.date1 and self.date2:
-            if self.p2.edi and time.mktime(self.p2.edi) - time.mktime(self.date1) >= 30*24*3600:
-                return self.p1
-            elif self.p1.edi and time.mktime(self.p1.edi) - time.mktime(self.date2) >= 30*24*3600:
-                return self.p2
-        return None
+            if self.p2.edi:
+                diff21 = (time.mktime(self.p2.edi) - time.mktime(self.date1))/(24*3600)
+                if diff21 >= min_days:
+                    return (self.p1, diff21) if return_diff else self.p1
+            if self.p1.edi:
+                diff12 = (time.mktime(self.p1.edi) - time.mktime(self.date2))/(24*3600)
+                if diff12 >= min_days:
+                    return (self.p2, diff12) if return_diff else self.p2
+        return (None, 0) if return_diff else None
+
+    def why_no_direction (self, min_days = 30):
+        if self.date1 and self.date2:
+            if self.p2.edi is None and self.p1.edi is None:
+                return "No EDI"
+            if self.p2.edi:
+                diff21 = (time.mktime(self.p2.edi) - time.mktime(self.date1))/(24*3600)
+                if diff21 < min_days:
+                    if diff21 > 0:
+                        return "Dates too close"
+                    else:
+                        return "Predates"
+            if self.p1.edi:
+                diff12 = (time.mktime(self.p1.edi) - time.mktime(self.date2))/(24*3600)
+                if diff12 < min_days:
+                    if diff12 > 0:
+                        return "Dates too close"
+                    else:
+                        return "Predates"
+        return "Missing dates"
 
     def direction(self):
         dir = self.compute_direction()
@@ -445,13 +469,30 @@ class transmission_network:
             return self.nodes[pat_with_id]
         return None
 
-    def get_all_edges_linking_to_a_node  (self, id1, ignore_visible = False): 
+    def get_all_edges_linking_to_a_node  (self, id1, ignore_visible = False, use_direction = False, incoming = False): 
         list_of_nodes = set()
         pat = patient (id1)
         for anEdge in self.edges:
             if anEdge.visible or ignore_visible:
                 if pat == anEdge.p2 or pat == anEdge.p1:
+                    if use_direction:
+                        dir = anEdge.compute_direction()
+                        if dir is not None and ((not incoming and dir != pat) or (incoming and dir == pat)):            
+                            continue
+                             
                     list_of_nodes.add (anEdge)
+        return list_of_nodes
+
+    def get_node_neighborhood  (self, id1, ignore_visible = False, use_direction = False, incoming = False): 
+        list_of_nodes = set()
+        list_of_edges = self.get_all_edges_linking_to_a_node(id1,ignore_visible,use_direction, incoming)
+        pat = patient (id1)
+        for anEdge in list_of_edges:
+            if anEdge.p1 == pat:
+                list_of_nodes.add (anEdge.p2)
+            else:
+                list_of_nodes.add (anEdge.p2)                
+            
         return list_of_nodes
 
     def summarize_bootstrap (self):
@@ -762,11 +803,17 @@ class transmission_network:
             file.write (','.join ([ext_edge.p1.id, ext_edge.p2.id, str(self.edges[ext_edge])]))
             file.write ('\n')
 
-    def get_node_degree_list (self, year_cap = None, do_direction = False):
+    def get_node_degree_list (self, year_cap = None, do_direction = False, id_list = None):
         degree_list = {}
         self.clear_adjacency()
         self.compute_adjacency(do_direction)
-        for node in self.nodes:
+        
+        if id_list:
+            id_list = [self.has_node_with_id(k) for k in id_list]
+        else:
+            id_list = self.nodes
+            
+        for node in id_list:
             if year_cap is not None and node.get_baseline_date() > year_cap:
                     degree_list[node] = None
             else:
@@ -792,6 +839,18 @@ class transmission_network:
         
     def sample_subset    (self, size):
         return random.sample (self.nodes, int (size))
+        
+    def sample_subset_year_list    (self, years):
+        selected_nodes = set()
+        if len (years) > len (self.nodes):
+            return None
+        for a_year in years:
+            a_sample = random.sample (list(self.nodes), 1)[0]
+            while (a_sample.get_baseline_date() != a_year or a_sample in selected_nodes):
+                a_sample = random.sample (list(self.nodes), 1)[0]
+            selected_nodes.add (a_sample)
+        return selected_nodes 
+        
         
     def output_sequence_names (self):
         pass
@@ -844,7 +903,30 @@ class transmission_network:
                 fitted[name] = None
         return {'Best' : bestDistro, 'rho': rho, 'BIC' : bic, 'p' : p, 'fitted': fitted, 'degrees': all_deg}
 
-
+    def simulate_treatment (self,treated_nodes, node_neighs_out, node_neighs_in, removal_rate = 1.):
+        removed_nodes = set()
+        handled_nodes = set()
+        new_nodes     = set(treated_nodes)            
+        
+        while True:
+            for a_removed_node in removed_nodes:
+                if a_removed_node not in handled_nodes:
+                    nbhd = node_neighs_out[a_removed_node].difference(removed_nodes).difference(new_nodes)
+                    for nb_node in nbhd:
+                        potential_sources = node_neighs_in[nb_node].difference (removed_nodes).difference(new_nodes)
+                        if random.random() <= 1./len(potential_sources):
+                            if nb_node not in treated_nodes or random.random () < removal_rate:
+                                new_nodes.add (nb_node)
+                                                            
+                    handled_nodes.add (a_removed_node)
+                    
+            if len (new_nodes) == 0:
+                break
+            else:
+                removed_nodes = removed_nodes.union(new_nodes)
+            new_nodes = set ()
+        
+        return removed_nodes.difference (treated_nodes)
         
     def get_degree_distribution (self, **kwargs):
 
