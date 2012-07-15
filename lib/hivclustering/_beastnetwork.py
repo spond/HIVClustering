@@ -7,7 +7,7 @@ import hypy as hy
 import os
 import csv
 
-__all__ = ['edge', 'patient', 'transmission_network', 'parseAEH', 'parseLANL', 'parsePlain', 'describe_vector']
+__all__ = ['edge', 'patient', 'transmission_network', 'parseAEH', 'parseLANL', 'parsePlain', 'describe_vector', 'tm_to_datetime']
 #-------------------------------------------------------------------------------
 
 
@@ -82,17 +82,25 @@ class edge:
         if attribute is not None:
             self.attribute.add (attribute)
 
-    def compute_direction (self, return_diff = False, min_days = 30):
+    def compute_direction (self, return_diff = False, min_days = 30, assume_missing_is_chronic = 180):
     # returns the node FROM which the edge is pointing AWAY
         if self.date1 and self.date2:
             if self.p2.edi:
                 diff21 = (time.mktime(self.p2.edi) - time.mktime(self.date1))/(24*3600)
                 if diff21 >= min_days:
                     return (self.p1, diff21) if return_diff else self.p1
+                elif assume_missing_is_chronic is not None:
+                    if self.p1.edi is None and diff21 >= -assume_missing_is_chronic:
+                        return (self.p1, diff21) if return_diff else self.p1
+                    
             if self.p1.edi:
                 diff12 = (time.mktime(self.p1.edi) - time.mktime(self.date2))/(24*3600)
                 if diff12 >= min_days:
                     return (self.p2, diff12) if return_diff else self.p2
+                elif assume_missing_is_chronic is not None:
+                    if self.p2.edi is None and diff12 >= -assume_missing_is_chronic:
+                        return (self.p2, diff12) if return_diff else self.p2
+                        
         return (None, 0) if return_diff else None
 
     def why_no_direction (self, min_days = 30):
@@ -182,12 +190,21 @@ class edge:
     def has_attribute (self, attr):
         return attr in self.attribute
 
+    def remove_attribute (self, attr):
+        self.attribute.discard (attr)
+
     def check_date (self, year, newer = False):
         if newer:
             return (self.date1 == None or self.date1.tm_year >= year) and (self.date2 == None or self.date2.tm_year >= year)         
         else:
             return (self.date1 == None or self.date1.tm_year <= year) and (self.date2 == None or self.date2.tm_year <= year) 
         
+    def check_exact_date (self, the_date, newer = False):
+        if newer:
+            return (self.date1 >= the_date) and (self.date2 >= the_date)         
+        else:
+            return (self.date1 <= the_date) and (self.date2 <= the_date) 
+
     def __lt__ (self, other):
         return self.__comp__ (other) == -1
 
@@ -207,8 +224,16 @@ class edge:
         return self.p1 == other.p1 and self.p2 == other.p2 and self.date1 == other.date1 and self.date2 == other.date2
         
     def __repr__ (self):
-        return "%s (%s) -- %s (%s)" % (self.p1.id, time.strftime ("%m-%d-%y",self.date1) if self.date1 is not None else 'None', self.p2.id, time.strftime ("%m-%d-%y",self.date2) if self.date2 is not None else 'None')
-
+        dir = self.compute_direction()
+        if dir is None:
+            dir = '--'
+        elif dir == self.p1:
+            dir = '->'
+        else:
+            dir = '<-'
+            
+        return "%s (%s) %s %s (%s)" % (self.p1.id, time.strftime ("%m-%d-%y",self.date1) if self.date1 is not None else 'None', dir, self.p2.id, time.strftime ("%m-%d-%y",self.date2) if self.date2 is not None else 'None')
+            
 #-------------------------------------------------------------------------------
 
 
@@ -265,6 +290,9 @@ class patient:
         if attrib is not None:
             self.attributes.add (attrib)
         
+    def remove_attribute (self, attrib):
+        self.attributes.discard (attrib)
+
     def add_date (self, date):
         if date not in self.dates:
             self.dates.append (date)
@@ -491,7 +519,7 @@ class transmission_network:
             if anEdge.p1 == pat:
                 list_of_nodes.add (anEdge.p2)
             else:
-                list_of_nodes.add (anEdge.p2)                
+                list_of_nodes.add (anEdge.p1)                
             
         return list_of_nodes
 
@@ -539,13 +567,19 @@ class transmission_network:
                     self.edges [new_edge] = distance
             else:    
                 if edge_attribute is not None:
-                    #print ('Existing distance %s:%g' % (new_edge,self.edges [new_edge]))
                     for k in self.edges:   
                         if k == new_edge:
                             k.update_attributes (edge_attribute)
                             break
                     
+ 
+#               for an_edge in self.edges:
+#                    if an_edge.__hash__() == new_edge.__hash__():
+#                        print ("%s -> %s" % (an_edge, new_edge))
+#                        break 
+    
                 if distance < self.edges [new_edge]:
+                    #print ('Edge update. New edge %s: %s' % (new_edge.p1, new_edge.p2))
                     self.edges [new_edge] = distance
                     
                 
@@ -636,6 +670,15 @@ class transmission_network:
                 vis_count += edge.visible
         return vis_count
             
+    def apply_exact_date_filter     (self, the_date, newer = False, do_clear = True):
+        if do_clear : self.clear_adjacency()
+        vis_count = 0
+        for edge in self.edges:
+            if edge.visible:
+                edge.visible = edge.check_exact_date (the_date, newer)
+                vis_count += edge.visible
+        return vis_count
+
     def apply_distance_filter (self, distance, do_clear = True):
         if do_clear : self.clear_adjacency()
         vis_count = 0
@@ -913,7 +956,8 @@ class transmission_network:
                 if a_removed_node not in handled_nodes:
                     nbhd = node_neighs_out[a_removed_node].difference(removed_nodes).difference(new_nodes)
                     for nb_node in nbhd:
-                        potential_sources = node_neighs_in[nb_node].difference (removed_nodes).difference(new_nodes)
+                        potential_sources = node_neighs_in[nb_node] - removed_nodes - new_nodes
+                        potential_sources.add (a_removed_node)
                         if random.random() <= 1./len(potential_sources):
                             if nb_node not in treated_nodes or random.random () < removal_rate:
                                 new_nodes.add (nb_node)
@@ -923,7 +967,7 @@ class transmission_network:
             if len (new_nodes) == 0:
                 break
             else:
-                removed_nodes = removed_nodes.union(new_nodes)
+                removed_nodes.update(new_nodes)
             new_nodes = set ()
         
         return removed_nodes.difference (treated_nodes)
