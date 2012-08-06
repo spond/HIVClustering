@@ -497,7 +497,7 @@ class transmission_network:
             return self.nodes[pat_with_id]
         return None
 
-    def get_all_edges_linking_to_a_node  (self, id1, ignore_visible = False, use_direction = False, incoming = False): 
+    def get_all_edges_linking_to_a_node  (self, id1, ignore_visible = False, use_direction = False, incoming = False, add_undirected = False): 
         list_of_nodes = set()
         pat = patient (id1)
         for anEdge in self.edges:
@@ -505,15 +505,18 @@ class transmission_network:
                 if pat == anEdge.p2 or pat == anEdge.p1:
                     if use_direction:
                         dir = anEdge.compute_direction()
-                        if dir is not None and ((not incoming and dir != pat) or (incoming and dir == pat)):            
+                        if dir is not None:
+                            if ((not incoming and dir != pat) or (incoming and dir == pat)):            
+                                continue
+                        elif not add_undirected:
                             continue
                              
                     list_of_nodes.add (anEdge)
         return list_of_nodes
 
-    def get_node_neighborhood  (self, id1, ignore_visible = False, use_direction = False, incoming = False): 
+    def get_node_neighborhood  (self, id1, ignore_visible = False, use_direction = False, incoming = False, add_undirected = False): 
         list_of_nodes = set()
-        list_of_edges = self.get_all_edges_linking_to_a_node(id1,ignore_visible,use_direction, incoming)
+        list_of_edges = self.get_all_edges_linking_to_a_node(id1,ignore_visible,use_direction, incoming, add_undirected)
         pat = patient (id1)
         for anEdge in list_of_edges:
             if anEdge.p1 == pat:
@@ -881,7 +884,7 @@ class transmission_network:
         return degree_list
         
     def sample_subset    (self, size):
-        return random.sample (self.nodes, int (size))
+        return random.sample (list(self.nodes), int (size))
         
     def sample_subset_year_list    (self, years):
         selected_nodes = set()
@@ -970,7 +973,8 @@ class transmission_network:
                 removed_nodes.update(new_nodes)
             new_nodes = set ()
         
-        return removed_nodes.difference (treated_nodes)
+        removed_nodes = removed_nodes.difference (treated_nodes)
+        return removed_nodes
         
     def get_degree_distribution (self, **kwargs):
 
