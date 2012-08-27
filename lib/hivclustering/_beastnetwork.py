@@ -245,6 +245,7 @@ class patient:
         self.id                = id # a unique patient ID
         self.dates             = [] # date objects
         self.edi               = None # estimated date of infection
+        self.stage             = 'Chronic' # disease stage
         self.treatment_date    = None # the date treatment started
         self.vl                = None # viral load at baseline
         self.degree            = 0
@@ -303,6 +304,9 @@ class patient:
     def add_edi  (self, edi):
         self.edi = edi
 
+    def add_stage  (self, stage):
+        self.stage = stage
+
     def add_treatment  (self, drugz):
         self.treatment_date = drugz
         
@@ -311,7 +315,7 @@ class patient:
         
     def add_naive (self, naive):
         self.naive = naive
-        
+                
     def get_baseline_date (self, complete = False):
         if self.dates[0] is None:
             return None
@@ -398,7 +402,7 @@ class transmission_network:
                 continue
             self.add_an_edge(line[0],line[1],distance,formatter,default_attribute,bootstrap_mode)  
             
-    def sample_from_network (self, how_many_nodes = 100, how_many_edges = None):
+    def sample_from_network (self, how_many_nodes = 100, how_many_edges = None, node_sampling_bias = 0.0):
         if how_many_edges is not None:
             if how_many_edges >= len (self.edges):
                 return self                
@@ -413,8 +417,58 @@ class transmission_network:
             return self
             
         subset_network = transmission_network()
-        nodes = random.sample (list(self.nodes), how_many_nodes)
         
+        if node_sampling_bias > 0.: 
+            nodes     = set ()
+            left_over = set (list(self.nodes))
+            connected_to_existing = set ()
+            
+            node_neighbs   = {}
+            sampling_probs = {}
+            
+            for a_node in self.nodes:
+                node_neighbs [a_node]   = self.get_node_neighborhood (a_node.id,True,False)
+                sampling_probs [a_node] = 1.
+
+            nodes.add                    (a_node)
+            left_over.remove             (a_node)
+            connected_to_existing.update (node_neighbs[a_node])
+            connected_to_existing.add (a_node)
+
+            for a_node in connected_to_existing:
+                sampling_probs[a_node] += node_sampling_bias
+            
+            upper_bound   = len(left_over) + (len(connected_to_existing)-1)*node_sampling_bias
+            
+            while len (nodes) < how_many_nodes:
+                up_to = random.random() * upper_bound
+                local_sum = 0
+                for a_node in left_over: 
+                    local_sum += sampling_probs[a_node]
+                    if local_sum >= up_to: 
+                        break               
+                        
+                if local_sum < up_to:
+                    raise Exception ('Sampling fubar')
+ 
+                nodes.add                    (a_node)
+                connected_to_existing.add    (a_node)
+                new_connections = node_neighbs[a_node]-connected_to_existing
+                connected_to_existing.update (new_connections)
+                #print (a_node.id, len(new_connections), upper_bound, up_to, sum ([sampling_probs[k] for k in left_over]))       
+                left_over.remove             (a_node)
+
+                upper_bound   += len(new_connections)*node_sampling_bias - sampling_probs[a_node]
+               
+                for a_node in new_connections:
+                    sampling_probs[a_node] += node_sampling_bias
+
+
+            
+            #print (sampling_probs.values())
+        else:
+            nodes = random.sample (list(self.nodes), how_many_nodes)
+            
         for a_node in nodes:
             this_node = self.nodes[a_node]
             subset_network.insert_patient (this_node.id, this_node.dates[0], False, None)
@@ -422,7 +476,7 @@ class transmission_network:
         for an_edge in self.edges:
             if an_edge.p1 in subset_network.nodes and an_edge.p2 in subset_network.nodes:
                 subset_network.add_an_edge (an_edge.p1.id, an_edge.p2.id, self.edges[an_edge], header_parser = parsePlain)
-                
+                    
         return subset_network
 
     def create_a_random_network (self, network_size = 100):
@@ -482,9 +536,13 @@ class transmission_network:
             if node.id in edi:
                 #[geno_date, drug_date, edi_date, viral_load, naive]
                 node.add_treatment (edi[node.id][1])
-                node.add_edi (edi[node.id][2])
-                node.add_vl (edi[node.id][3])
-                node.add_naive (edi[node.id][4])
+                node.add_stage (edi[node.id][2])
+                node.add_edi (edi[node.id][3])
+                if edi[node.id][3] is not None:
+                    node.add_stage (edi[node.id][2])
+                    
+                node.add_vl (edi[node.id][4])
+                node.add_naive (edi[node.id][5])
 
 
     def has_an_edge        (self, id1, id2): 
@@ -641,12 +699,19 @@ class transmission_network:
         multiple_samples = []
         edge_count = 0
         
+        nodes_by_stage = {}
+        
         for edge in self.edges:
             if edge.visible:
                 edge_count += 1
                 for p in [edge.p1,edge.p2]:
                     if p not in vis_nodes:
                         vis_nodes.add (p)
+                        if p.stage not in nodes_by_stage:
+                            nodes_by_stage [p.stage] = 1
+                        else:
+                            nodes_by_stage [p.stage] += 1
+                            
                         if p.get_sample_count() > 1:
                             multiple_samples.append([p.get_sample_count(),p.get_length_of_followup()])
                         
@@ -654,7 +719,7 @@ class transmission_network:
                 edge_set.add ((edge.p1, edge.p2))
 
         
-        return {'edges': len(edge_set), 'nodes': len(vis_nodes), 'total_edges': edge_count, 'multiple_dates':[[k[0],k[1].days] for k in multiple_samples], 'total_sequences': len(vis_nodes) + sum([k[0] for k in multiple_samples]) - len(multiple_samples) }
+        return {'edges': len(edge_set), 'nodes': len(vis_nodes), 'total_edges': edge_count, 'multiple_dates':[[k[0],k[1].days] for k in multiple_samples], 'total_sequences': len(vis_nodes) + sum([k[0] for k in multiple_samples]) - len(multiple_samples), 'stages' : nodes_by_stage }
                 
     def clear_adjacency (self):
         if self.adjacency_list is not None:
@@ -664,6 +729,19 @@ class transmission_network:
                 edge.visible = True
 
         
+    def apply_disease_stage_filter  (self, stages, do_clear = True, do_exclude = False):
+        if do_clear : self.clear_adjacency()
+        vis_count = 0
+        for edge in self.edges:
+            if edge.visible:
+                if do_exclude:
+                    edge.visible = edge.p1.stage not in stages and edge.p2.stage not in stages                
+                else:
+                    edge.visible = edge.p1.stage in stages and edge.p2.stage in stages
+                vis_count += edge.visible
+                
+        return vis_count
+
     def apply_date_filter     (self, edge_year, newer = False, do_clear = True):
         if do_clear : self.clear_adjacency()
         vis_count = 0
