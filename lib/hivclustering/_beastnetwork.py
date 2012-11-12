@@ -1,13 +1,13 @@
 
 
-import datetime, time, random
+import datetime, time, random, itertools, operator
 from math import log
-from copy import copy
+from copy import copy, deepcopy
 import hypy as hy
 import os
 import csv
 
-__all__ = ['edge', 'patient', 'transmission_network', 'parseAEH', 'parseLANL', 'parsePlain', 'describe_vector', 'tm_to_datetime']
+__all__ = ['edge', 'patient', 'transmission_network', 'parseAEH', 'parseLANL', 'parsePlain', 'describe_vector', 'tm_to_datetime', 'datetime_to_tm']
 #-------------------------------------------------------------------------------
 
 
@@ -53,7 +53,12 @@ def parsePlain (str):
     return patient_description, None        
     
 def tm_to_datetime (tm_object):
+    if tm_object is None: return None
     return datetime.datetime (tm_object.tm_year, tm_object.tm_mon, tm_object.tm_mday)
+
+def datetime_to_tm (datetime_object):
+    if datetime_object is None: return None
+    return time.strptime(datetime_object.strftime("%Y-%m-%d"),"%Y-%m-%d")
 
 def describe_vector (vector):
     vector.sort()
@@ -193,11 +198,12 @@ class edge:
     def remove_attribute (self, attr):
         self.attribute.discard (attr)
 
-    def check_date (self, year, newer = False):
+    def check_date (self, year, newer = False, weak = False):
+        op = operator.__or__ if weak else operator.__and__
         if newer:
-            return (self.date1 == None or self.date1.tm_year >= year) and (self.date2 == None or self.date2.tm_year >= year)         
+            return op(self.date1 == None or self.date1.tm_year >= year, self.date2 == None or self.date2.tm_year >= year)         
         else:
-            return (self.date1 == None or self.date1.tm_year <= year) and (self.date2 == None or self.date2.tm_year <= year) 
+            return op(self.date1 == None or self.date1.tm_year <= year ,self.date2 == None or self.date2.tm_year <= year) 
         
     def check_exact_date (self, the_date, newer = False):
         if newer:
@@ -252,6 +258,7 @@ class patient:
         self.cluster_id        = None
         self.naive             = None
         self.attributes        = set ()
+        self.label             = None
     
     def __hash__ (self):
         return self.id.__hash__()
@@ -294,6 +301,9 @@ class patient:
     def remove_attribute (self, attrib):
         self.attributes.discard (attrib)
 
+    def has_attribute (self, attr):
+        return attr in self.attributes
+
     def add_date (self, date):
         if date not in self.dates:
             self.dates.append (date)
@@ -309,6 +319,12 @@ class patient:
 
     def add_treatment  (self, drugz):
         self.treatment_date = drugz
+        
+    def get_label (self):
+        return self.label
+    
+    def set_label (self, l):
+        self.label = l
         
     def add_vl (self, vl):
         self.vl = vl
@@ -485,31 +501,55 @@ class transmission_network:
             self.add_an_edge (node_id, random.randint (1, node_id-1), 1, header_parser = parsePlain)
             
         return self
+       
+    def add_contemporaneuos_edges (self, diff, prob):
+        self.compute_clusters()
+        clusters = self.retrieve_clusters()
+        for cluster_id in clusters.keys():
+            if cluster_id is not None: 
+                pairs = itertools.combinations(clusters[cluster_id],2)
+                for node_pair in pairs:
+                     d1 = tm_to_datetime (node_pair[0].dates[0])
+                     d2 = tm_to_datetime (node_pair[1].dates[0])
+                     #print (d1, d2, diff)
+                     if (d1 < d2):
+                        if d2-d1 >= diff: continue
+                     else:
+                        if d1-d2 >= diff: continue
+                        
+                     if random.random () < prob:
+                        #print (node_pair[0].dates[0], node_pair[1].dates[0])
+                        self.add_an_edge ("|".join ([node_pair[0].id,time.strftime("%m%d%Y",node_pair[0].dates[0])]), "|".join ([node_pair[1].id,time.strftime("%m%d%Y",node_pair[1].dates[0])]), 0.01, header_parser = parseAEH)
+         
+    def create_a_pref_attachment_network (self, network_size = 100, random_attachment = 0.0, start_new_tree = 0.0, start_date = None, tick_rate = None):
         
-    def create_a_pref_attachment_network (self, network_size = 100):
+        attach_to = [1,2]
         
-        degrees = [0 for k in range(network_size+1)]
+        current_date = start_date
     
-        self.insert_patient (1, None, False, None)
-        self.insert_patient (2, None, False, None)
-        self.add_an_edge (1, 2, 1, header_parser = parsePlain)
-        degrees[1] = 1
-        degrees[2] = 1
-        totalDegrees = 2
-        
+        self.insert_patient (str(1), datetime_to_tm(current_date), False, None)
+        self.insert_patient (str(2), datetime_to_tm(current_date), False, None)
+                
         for node_id in range (3, network_size+1):
-            upto = random.randint (1, totalDegrees)
-            k    = 1
-            sum  = 1
+            if current_date is not None:
+                current_date += datetime.timedelta (days = random.expovariate (tick_rate))
+                #print (current_date)
+            if start_new_tree > 0.0 and random.random () < start_new_tree:  
+                self.insert_patient (str(node_id), datetime_to_tm(current_date), False, None)
+                attach_to.append (node_id)
+                continue
+               
             
-            while sum < upto:
-                sum += degrees[k]
-                k+=1
-        
-            self.add_an_edge (node_id, k, 1, header_parser = parsePlain)
-            totalDegrees    += 2
-            degrees[node_id] = 1
-            degrees[k]      += 1
+            if random_attachment > 0.0 and random.random() < random_attachment:
+                k = random.randint (1,node_id-1)
+            else:
+                k = random.choice (attach_to)   
+                        
+            if current_date is not None:
+                self.add_an_edge ("|".join([str(node_id),current_date.strftime("%m%d%Y")]), "|".join ([str(k),time.strftime("%m%d%Y",self.has_node_with_id(str(k)).dates[0])]), 1, header_parser = parseAEH)
+            else:       
+                self.add_an_edge (str(node_id), str(k), 1, header_parser = parsePlain)
+            attach_to.extend ([k, node_id])
             
         return self
     
@@ -543,8 +583,33 @@ class transmission_network:
                     
                 node.add_vl (edi[node.id][4])
                 node.add_naive (edi[node.id][5])
+                
+                
+    def randomize_attribute (self, attribute_value):
+        count = 0
+        for node in self.nodes:
+            if node.has_attribute (attribute_value): 
+                count += 1
+                node.remove_attribute (attribute_value)
+        
+        for node in random.sample (list(self.nodes), count):
+            node.add_attribute (attribute_value)
 
-
+    def edges_sharing_an_attribute (self, attribute_value = None, reduce_edges = True, ignore_visible = False): 
+        #if attribute_value == None, then any shared attributes count
+        
+        result = {'compared' : 0, 'shared' : 0};
+        
+        for anEdge in self.edges if reduce_edges == False else self.reduce_edge_set():
+            if anEdge.visible or ignore_visible:
+                result['compared'] += 1
+                if attribute_value is None:
+                    result['shared'] += (1 if (len(anEdge.p1.attributes.intersection (anEdge.p2.attributes)) > 0) else 0)
+                else:
+                    result['shared'] += (1 if anEdge.p1.has_attribute (attribute_value) and anEdge.p2.has_attribute (attribute_value) else 0)
+                
+        return result;
+    
     def has_an_edge        (self, id1, id2): 
         test_edge = edge (patient (id1), patient (id2), None, None, True)
         return self.edges[test_edge] if test_edge in self.edges else None
@@ -555,10 +620,10 @@ class transmission_network:
             return self.nodes[pat_with_id]
         return None
 
-    def get_all_edges_linking_to_a_node  (self, id1, ignore_visible = False, use_direction = False, incoming = False, add_undirected = False): 
+    def get_all_edges_linking_to_a_node  (self, id1, ignore_visible = False, use_direction = False, incoming = False, add_undirected = False, reduce_edges = True): 
         list_of_nodes = set()
         pat = patient (id1)
-        for anEdge in self.edges:
+        for anEdge in self.edges if reduce_edges == False else self.reduce_edge_set():
             if anEdge.visible or ignore_visible:
                 if pat == anEdge.p2 or pat == anEdge.p1:
                     if use_direction:
@@ -670,7 +735,68 @@ class transmission_network:
                     self.adjacency_list [anEdge.p2].add (anEdge.p1)
                                     
                  
+    def compute_path_stat (self, distances, stat = "mean"):
+        result = {}
+        node_count = len (distances['ordering'])
+        for i in range(node_count):
+            d = 0
+            for j,p in enumerate(distances['distances'][i]):
+                if p is None:
+                    if j==i: continue
+                    d = None
+                    break
+                else:
+                    d += p
+            
+            result[distances['ordering'][i]] = d / (node_count-1)
+         
+        return result   
+                
         
+    def compute_shortest_paths (self, subset = None, use_actual_distances = False):
+        self.compute_adjacency()
+        
+        if subset is None:
+            subset = self.adjacency_list.keys()
+            
+        node_count = len (subset)
+        distances  = []
+        
+        for a_node in (subset):
+            distances.append ([None for k in range (node_count)])
+            
+        for index,a_node in enumerate(subset):
+            for index2, second_node in enumerate(subset):
+                if second_node != a_node:
+                    if second_node in self.adjacency_list [a_node]:
+                        distances[index][index2] = 1
+                        distances[index2][index] = 1
+            
+        
+        distances2 = deepcopy (distances)
+       
+        for index_k, n_k in enumerate (subset):
+            for index_i,n_i in enumerate(subset):
+                for index_j, n_j in enumerate(subset):
+                    if n_i != n_j:
+                        d_ik = distances[index_k][index_i]
+                        d_jk = distances[index_k][index_j]
+                        d_ij = distances[index_i][index_j]
+                        if d_ik is not None and d_jk is not None:    
+                            d_ik += d_jk
+                            if d_ij is None or d_ij > d_ik:
+                                distances2 [index_i][index_j] = d_ik
+                                distances2 [index_j][index_i] = d_ik
+                                continue
+                        distances2 [index_j][index_i] = distances [index_j][index_i]
+                        distances2 [index_i][index_j] = distances [index_i][index_j]
+
+            t = distances2
+            distances2 = distances
+            distances = t
+            
+        return {'ordering': subset, 'distances': distances}
+
     def get_all_treated_within_range (self, daterange, outside = False):
         selection = []
         for node in self.nodes:
@@ -797,7 +923,7 @@ class transmission_network:
         return vis_count
              
 
-    def retrieve_clusters (self):
+    def retrieve_clusters (self, singletons = True):
         clusters = {}
         for node in self.nodes:
             #if node.cluster_id == None:
@@ -805,6 +931,9 @@ class transmission_network:
             if node.cluster_id not in clusters:
                 clusters [node.cluster_id] = []
             clusters [node.cluster_id].append (node)
+            
+        if not singletons:
+            clusters.pop (None)
         return clusters
             
     
