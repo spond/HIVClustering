@@ -139,7 +139,7 @@ for (k = 0; k < Abs(allDegs); k += 1)
 }
 
 
-//fprintf (stdout, maxD, "\n", degreeCounts, "\n", totalNon0, "\n");
+fprintf (stdout, maxD, "\n", degreeCounts, "\n", totalNon0, "\n");
 fprintf (stdout, "Degree,PDF,CDF\n");
 
 sum = 0;
@@ -171,7 +171,18 @@ x2 = 0;
 
 Optimize (res, likeFuncWaring(degreeCounts,x1,x2));
 fprintf (stdout, "\n\nWaring:\nLog(L) = ", res[1][0], "\nBIC = ", -res[1][0]*2 + Log(totalNon0) * res[1][1], "\nrho = ", x1, "\np = ", (x1-2)/(x1+x2-1), "\n");
-_degree_fit_results ["Waring"] = {"logL" : res[1][0], "BIC": -res[1][0]*2 + Log(totalNon0) * res[1][1], "rho": x1, "p": (x1-2)/(x1+x2-1), "x1" : x1, "x2" : x2};
+
+x1MLE = x1;
+x2MLE = x2;
+critLevel = 1.92073*2;
+FindRoot (zU, res[1][0] - likeFuncWaring(degreeCounts,x1,x2) - critLevel,x1, x1MLE, 10000);
+FindRoot (zL, res[1][0] - likeFuncWaring(degreeCounts,x1,x2) - critLevel,x1, 0, x1MLE);
+x1 = x1MLE;
+x2 = x2MLE;
+
+_degree_fit_results ["Waring"] = {"logL" : res[1][0], "BIC": -res[1][0]*2 + Log(totalNon0) * res[1][1], "rho": x1, "p": (x1-2)/(x1+x2-1), "x1" : x1, "x2" : x2, "rho_ci": {{zL__,zU__}}};
+
+
 
 
 x2 := 0;
@@ -221,14 +232,17 @@ function _THyPhyAskFor(key)
         return (_degree_fit_results[key[0][Abs(key)-5]])["BIC"];
     }
     
-    if (key == "Waring_p")
-    {
+    if (key == "Waring_p") {
         return (_degree_fit_results[key[0][Abs(key)-3]])["p"];
     }
     
     if (key == "Waring_PDF") {
         res = {Abs(allDegs),1};
         return res["Exp(waringDensity(_MATRIX_ELEMENT_ROW_+1,"+(_degree_fit_results ["Waring"])["x1"]+","+(_degree_fit_results ["Waring"])["x2"]+"))"];
+   }
+    
+    if (key == "Waring_rho_ci") {
+        return (_degree_fit_results ["Waring"])["rho_ci"];
     }
     
     if (key == "Waring" || key == "Yule" || key == "Pareto")

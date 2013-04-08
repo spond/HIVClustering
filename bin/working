@@ -1,7 +1,7 @@
 #!/usr/bin/env python3.2
 
-import csv, argparse, operator, sys, datetime, time, random, os.path, json, hypy as hy
-from math import log10
+import csv, argparse, operator, sys, datetime, time, random, os.path, json, hypy as hy, re
+from math import log10, floor
 #from scipy import stats
 from hivclustering import *
 
@@ -202,15 +202,65 @@ def import_edi (file):
 		
 	return edi_by_id
 
+
 #-------------------------------------------------------------------------------		
+
+def get_dot_string_tns (self, year_vis = None):    
+     
+    color = 'white'
+    style = ''
+    shape = 'circle' 
+    
+    if self.get_label() is not None:
+        label = self.get_label()
+    else:
+        label = ''#time.strftime("%b %Y", self.get_baseline_date(True))
+    
+    edi_info = self.get_treatment_since_edi()
+    
+    if self.get_treatment_since_edi () is not None:
+        if self.get_treatment_since_edi ().days <= 30:
+            style = ', width = 1, height = 1'
+        else:
+            shape = 'rect'
+            style = ', width = 0.25, height = 0.25'
+    else:
+        shape = 'diamond'
+            
+    #if self.get_sample_count() > 1:
+    #    shape = 'doubleoctagon'
+        
+    if year_vis is not None and self.get_baseline_date() > year_vis:
+        style += ', style="invis"'   
+    
+    #if self.has_attribute ('NRTI') or self.has_attribute ('NNRTI') or self.has_attribute ('PI'):
+    #    color = 'red'
+                
+    if year_vis is not None:
+        if self.get_baseline_date () > year_vis:
+            return '"%s" [label = "%s", fillcolor = "%s", shape = %s, style = "invis"];\n' % (self.id, label , color, shape)
+  
+    return '"%s" [label = "%s", fillcolor = "%s", shape = %s %s];\n' % (self.id, label , color, shape, style)
+
+
+#-------------------------------------------------------------------------------		
+
+
 
 def get_dot_string_vl (self, year_vis = None):    
     if 'focus' in self.attributes:
         shape = 'doublecircle'
     else:
         shape = 'circle' 
+    
     color = 'white'
-    label = ''#time.strftime("%b %Y", self.get_baseline_date(True))
+    style = ''
+
+   
+    if self.get_label() is not None:
+        label = self.get_label()
+    else:
+        label = ''#time.strftime("%b %Y", self.get_baseline_date(True))
     
     edi_info = self.get_treatment_since_edi()
     
@@ -224,12 +274,39 @@ def get_dot_string_vl (self, year_vis = None):
     '''
     
     
-    if self.get_sample_count() > 1:
-        label = str(self.get_sample_count())
+    #if self.get_sample_count() > 1:
+    #    label = str(self.get_sample_count())
         
 
 
-    color = 'white'
+    if self.get_treatment_since_edi () is not None:
+        if self.get_treatment_since_edi ().days <= 30:
+            style = ', width = 1, height = 1'
+        else:
+            style = ', shape=rect, width = 0.25, height = 0.25'
+    else:
+        shape = 'diamond'
+            
+    if self.get_sample_count() > 1:
+        shape = 'doubleoctagon'
+        
+    if year_vis is not None and self.get_baseline_date() > year_vis:
+        style += ', style="invis"'   
+    
+    #if self.has_attribute ('NRTI') or self.has_attribute ('NNRTI') or self.has_attribute ('PI'):
+    #    color = 'red'
+    
+    '''
+    if hasattr(self,'edge_set'):
+       if len (self.edge_set) > 0:
+            color = 'gray%d' % (max(0,100-5*len(self.edge_set)))
+            #print (len(self.edge_set), color, min(0,100-2*len(self.edge_set))
+    
+    '''   
+    
+    if self.get_label() is not None:
+       #print (self.get_label())
+       color = '/reds9/%d' % (floor(float(self.get_label())))
     
     if self.vl is not None:
        color = '/reds9/%d' % (round(log10 (self.vl)))
@@ -245,16 +322,45 @@ def get_dot_string_vl (self, year_vis = None):
     if year_vis is not None:
         if self.get_baseline_date () > year_vis:
             return '"%s" [label = "%s", fillcolor = "%s", shape = %s, style = "invis"];\n' % (self.id, label , color, shape)
-        
-    return '"%s" [label = "%s", fillcolor = "%s", shape = %s];\n' % (self.id, label , color, shape)
-
+  
+    return '"%s" [label = "%s", fillcolor = "%s", shape = %s %s];\n' % (self.id, label , color, shape, style)
+    
+    
 #-------------------------------------------------------------------------------		
 
-def generate_dot_454 (self, file, year_vis = None, reduce_edges = True):
-    file.write ('digraph G { overlap="prism100";\n outputorder = edgesfirst;\nnode[style=filled];\n');
+def count_edges_in_span (network, node_set, year_from, year_to, reduce_edges = True):
+    edge_count = 0
+    for edge in network.edges if reduce_edges == False else network.reduce_edge_set():
+        if edge.visible:
+            if edge.p1 in node_set or edge.p2 in node_set:
+                if edge.check_date(year_to) and edge.check_date (year_from, newer = True, weak = True):
+                    source = edge.compute_direction ()
+                    if source is not None and source not in node_set:
+                        continue
+                    edge_count += 1
+    return edge_count
+    
+#-------------------------------------------------------------------------------		
+
+def total_followup (node_set, year):
+    tfo = datetime.timedelta (0)
+    year = datetime.datetime (year, 1,1)
+    for node in node_set:
+        fu = node.get_followup_length (year)
+        if fu.days >= 0:
+            tfo += fu
+        
+    return tfo.days/365
+    
+#-------------------------------------------------------------------------------		
+
+def generate_dot_454 (self, file, year_vis = None, year_span = None, reduce_edges = True):
+    file.write ('digraph G { \n outputorder = edgesfirst;\nnode[style=filled];\n');
     nodes_drawn = {}
     
     directed = {'undirected':0, 'directed':0}
+    
+    year_span = 0 if year_span is None else year_span
     
     for edge in self.edges if reduce_edges == False else self.reduce_edge_set():
         if edge.visible:
@@ -262,25 +368,58 @@ def generate_dot_454 (self, file, year_vis = None, reduce_edges = True):
             
             if edge.p1 not in nodes_drawn:
                 nodes_drawn[edge.p1] = edge.p1.get_baseline_date()
-                file.write (edge.p1.get_dot_string(year_vis))
+                file.write (edge.p1.get_dot_string(year_vis+ year_span))
             if edge.p2 not in nodes_drawn:
                 nodes_drawn[edge.p2] = edge.p2.get_baseline_date()
-                file.write (edge.p2.get_dot_string(year_vis))
+                file.write (edge.p2.get_dot_string(year_vis+ year_span))
             
-            year_diff = abs(edge.date1.tm_year - edge.date2.tm_year)
             if isinstance(edge.compute_direction(),type(None)):
                 directed ['undirected'] += 1
             else:
                 directed ['directed'] += 1
             edge_attr = edge.direction()
             
+            extra = ''
+            
             if year_vis is not None:
-                if edge.check_date (year_vis) == False:
+                color = 'gray60'
+                if edge.check_date (year_vis+year_span) == False:
                     file.write ('%s [style="invis" arrowhead = "%s"];\n' % (edge_attr[0], edge_attr[1]));
                     continue
+                else:
+                    paint_me = edge.check_date(year_vis+year_span) and edge.check_date (year_vis, newer = True, weak = True)
+                    if paint_me:
+                        d1 = edge.p1.get_treatment_since_edi ()
+                        d2 = edge.p2.get_treatment_since_edi ()
+                        if d1 is not None or d2 is not None:
+                            source = edge.compute_direction ()
+                            if d1 is not None and d2 is not None:
+                                if source is not None:
+                                    if source == edge.p2:
+                                        d1 = d2
+                                    color = 'red' if d1.days<=30 else 'blue'
+                                    extra = 'penwidth = 5'
+                                else:
+                                    d1 = min (d1, d2)
+                                    color = 'red' if d1.days<=30 else 'blue'
+                                    extra = 'penwidth = 5'
+                            else:
+                                if d2 is None:
+                                    if source is None or source == edge.p1:
+                                        color = 'red' if d1.days <=30 else 'blue'
+                                        extra = 'penwidth = 5'
+                                else:
+                                    if source is None or source == edge.p2:
+                                        color = 'red' if d2.days <=30 else 'blue'
+                                        extra = 'penwidth = 5'
+                                        
+                                         
                     
-            color = 'red' if edge.has_attribute ('UDS') else 'black'   
-            file.write ('%s [style="bold" color = "%s" label = "%s" arrowhead = "%s"];\n' % (edge_attr[0], color, edge.label(), edge_attr[1]));
+            else:
+                color = 'red' if edge.has_attribute ('UDS') else 'gray80'   
+           
+            #color = 'red' if edge.has_attribute ('UDS') else 'gray80'   
+            file.write ('%s [style="bold" color = "%s" label = "%s" arrowhead = "%s" %s];\n' % (edge_attr[0], color, edge.label(), edge_attr[1], extra));
 
     file.write ("\n};")
     return directed    
@@ -421,6 +560,21 @@ def compute_tns (network, year_from, year_to, distance = 0.015, fitted = None, o
                 print (k, file = sys.stderr)
             '''
     return by_id
+     
+#-------------------------------------------------------------------------------		
+
+def report_attribute_linkage (network, attribute, reps = 100):
+    observed = network.edges_sharing_an_attribute(attribute)
+    p = 0
+    for k in range (reps):
+        network.randomize_attribute (attribute)
+        random_stat =  network.edges_sharing_an_attribute(attribute)
+        if random_stat['shared'] >= observed['shared']: p+=1
+        
+    print ("Attribute %s: observed %d (p = %g)" % (attribute, observed['shared'], (p+1) / (1+float(k))))
+        
+    
+  
                
 #-------------------------------------------------------------------------------		
 
@@ -437,9 +591,10 @@ arguments.add_argument('-d', '--dot',   help = 'Output DOT file for GraphViz (or
 arguments.add_argument('-c', '--cluster', help = 'Output a CSV file with cluster assignments for each sequence', required = True)
 arguments.add_argument('-t', '--threshold', help = 'Only count edges where the distance is less than this threshold')
 arguments.add_argument('-e', '--edi',   help = 'A .csv file with EDI dates')
-arguments.add_argument('-f', '--format',   help = 'Sequence ID format. One of AEH (ID | sample_date | otherfiels default), LANL (e.g. B_HXB2_K03455_1983 : subtype_country_id_year -- could have more fields), plain (treat as sequence ID only, no meta)')
+arguments.add_argument('-f', '--format',   help = 'Sequence ID format. One of AEH (ID | sample_date | otherfiels default), LANL (e.g. B_HXB2_K03455_1983 : subtype_country_id_year -- could have more fields), regexp (match a regular expression, use the first group as the ID), or plain (treat as sequence ID only, no meta)')
 arguments.add_argument('-x', '--exclude',   help = 'Exclude any sequence which belongs to a cluster containing a "reference" strain, defined by the year of isolation. The value of this argument is an integer year (e.g. 1983) so that any sequence isolated in or before that year (e.g. <=1983) is considered to be a lab strain. This option makes sense for LANL or AEH data.')
-
+arguments.add_argument('-r', '--resistance',   help = 'Load a JSON file with resistance annotation by sequence', type = argparse.FileType('r'))
+arguments.add_argument('-p', '--parser', help = 'The reg.exp pattern to split up sequence ids; only used if format is regexp', required = False, type = str)
 settings = arguments.parse_args()
 
 if settings.input == None:
@@ -480,7 +635,7 @@ except IOError:
 formatter = parseAEH
 
 if settings.format is not None:
-	formats = {"AEH" : parseAEH, "LANL": parseLANL, "plain": parsePlain}
+	formats = {"AEH" : parseAEH, "LANL": parseLANL, "plain": parsePlain, "regexp": parseRegExp (None if settings.parser is None else re.compile(settings.parser))}
 	try:
 		formatter = formats[settings.format]
 	except KeyError:
@@ -497,7 +652,7 @@ if settings.exclude is not None:
 
 if settings.threshold is not None:
 	settings.threshold = float (settings.threshold)
-
+	
 
 if settings.uds is not None:
 	try:
@@ -564,10 +719,39 @@ if settings.threshold is None:
     sys.exit(0)
 
 
+dram_by_id = None
+if settings.resistance is not None:
+    dram = json.load (settings.resistance)
+    dram_by_id = {}
+    for id in dram:
+        dram_by_id [parseAEH(id)[0]['id']] = dram[id]
+        
+    for node in network.nodes:
+        if node.id in dram_by_id:
+            for drug in dram_by_id[node.id]:
+                node.add_attribute (drug)
 
+    #report_attribute_linkage  (network,'PI',1000)
+    #report_attribute_linkage  (network,'NRTI',1000)
+    #report_attribute_linkage  (network,'NNRTI',1000)
+    #report_attribute_linkage  (network,None,1)
 
 distro_fit = describe_network (network)
-network.generate_dot (settings.dot)
+#network.generate_dot (settings.dot)
+
+'''
+for y in range (2005, 2013):
+    with open ("results/%d.dot"%y, "w") as FH:
+        for node in network.nodes:
+            node.edge_set = set ()
+            edges = network.get_all_edges_linking_to_a_node (node.id, ignore_visible = True, use_direction = True, incoming = False, add_undirected = True, reduce_edges = False)
+            for an_edge in edges:
+                if an_edge.check_date (y):
+                    node.edge_set.add (an_edge.p1)
+                    node.edge_set.add (an_edge.p2)
+            #print (node.id, ":", len(node.naive))
+        network.generate_dot (FH, year_vis = y)
+'''
 
 fitted = distro_fit['fitted']['Waring']
 
@@ -597,9 +781,59 @@ for k in observed_vs_fitted:
 #print ()
 #describe_network (network)
 
+'''
+print ("\t".join(["ClusterID","NodeID","MeanPathLength","RelativeToClusterMin","ClusterSize"]))
 
+for cid, a_cluster in network.retrieve_clusters(singletons = False).items():
+    paths = network.compute_shortest_paths (subset = a_cluster)
+    #print (paths)
+    paths = network.compute_path_stat (paths)
+    min_d = min(paths.values())
+    for n, d in paths.items():
+        network.has_node_with_id(n.id).set_label ("%2.3g" % d)
+        print ("%d\t%s\t%g\t%g\t%d" % (cid, n.id, d,d/min_d, len (a_cluster)))
+'''
+            
+patient.get_dot_string = get_dot_string_tns
+network.generate_dot (settings.dot, year_vis = 2005, year_span = 9)
 
+node_set_early = set ()
+node_set_late  = set ()
+node_set_none  = set ()
+
+for node in network.nodes:
+    tedi = node.get_treatment_since_edi ()
+    if tedi is not None:
+        if tedi.days <= 30:
+            node_set_early.add (node)
+        else:
+            node_set_late.add (node)
+    else:
+        node_set_none.add (node)
+
+t = []        
+for y in range (2005,2012):
+    t.append (count_edges_in_span (network, node_set_early, 2005, y)/total_followup (node_set_early, y+1))
+    
+print ("\t".join ([str (k) for k in t]))
+    
+t = []        
+for y in range (2005,2012):
+    t.append (count_edges_in_span (network, node_set_late, 2005, y)/total_followup (node_set_late, y+1))
+    
+print ("\t".join ([str (k) for k in t]))
+
+t = []        
+for y in range (2005,2012):
+    t.append (count_edges_in_span (network, node_set_none, 2005, y)/total_followup (node_set_none, y+1))
+    
+print ("\t".join ([str (k) for k in t]))
+        
+        
 sys.exit (0)
+
+#----------------------------------------------------------------------------------------
+
 outdeg          = True
 #fitted_degrees  = {}
 

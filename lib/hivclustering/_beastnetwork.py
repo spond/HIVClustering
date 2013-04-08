@@ -1,13 +1,13 @@
 
 
-import datetime, time, random, itertools, operator
+import datetime, time, random, itertools, operator, re
 from math import log
 from copy import copy, deepcopy
-import hypy as hy
+import hppy as hy
 import os
 import csv
 
-__all__ = ['edge', 'patient', 'transmission_network', 'parseAEH', 'parseLANL', 'parsePlain', 'describe_vector', 'tm_to_datetime', 'datetime_to_tm']
+__all__ = ['edge', 'patient', 'transmission_network', 'parseAEH', 'parseLANL', 'parsePlain', 'parseRegExp', 'describe_vector', 'tm_to_datetime', 'datetime_to_tm']
 #-------------------------------------------------------------------------------
 
 
@@ -26,6 +26,21 @@ def parseAEH (str):
         raise
     
     return patient_description, ('|'.join(bits[2:]) if len (bits) > 2  else None)
+
+def parseRegExp (regexp):
+    def parseHeader (str):
+        try:
+            bits = regexp.search(str.rstrip())
+            patient_description = {}
+            patient_description ['id']   =  bits.group(1)
+            patient_description ['date']  = None
+            patient_description ['rawid'] = str
+        except:
+            print ("Could not parse the following ID as the reg.exp. header: %s" % str)
+            raise
+        
+        return patient_description, ('|'.join(bits[2:]) if len (bits.groups()) > 2  else None)
+    return parseHeader
     
 def parseLANL (str):
     try:
@@ -63,7 +78,7 @@ def datetime_to_tm (datetime_object):
 def describe_vector (vector):
     vector.sort()
     l = len (vector)
-    return {'count': l, 'min': vector[0], 'max': vector[-1], 'mean': sum(vector)/l, 'median':  vector [l//2] if l % 2 == 1 else 0.5*(vector[l//2-1]+vector[l//2])}
+    return {'count': l, 'min': vector[0], 'max': vector[-1], 'mean': sum(vector)/l, 'median':  vector [l//2] if l % 2 == 1 else 0.5*(vector[l//2-1]+vector[l//2]), "IQR": [vector [l//4], vector [(3*l)//4]] }
 
 #-------------------------------------------------------------------------------
 
@@ -128,14 +143,14 @@ class edge:
                         return "Predates"
         return "Missing dates"
 
-    def direction(self):
+    def direction(self, do_csv = False):
         dir = self.compute_direction()
         if dir and self.p1 == dir:
-            return ['"%s" -> "%s"' % (self.p1.id, self.p2.id), 'normal']
+            return ["%s,%s,1"% (self.p1.id, self.p2.id)] if do_csv else ['"%s" -> "%s"' % (self.p1.id, self.p2.id), 'normal'] 
         elif dir and self.p2 == dir:
-            return ['"%s" -> "%s"' % (self.p2.id, self.p1.id), 'normal']
+            return ["%s,%s,1"% (self.p2.id, self.p1.id)] if do_csv else ['"%s" -> "%s"' % (self.p2.id, self.p1.id), 'normal']
             
-        return ['"%s" -> "%s"' % (self.p1.id, self.p2.id), 'none']
+        return  ["%s,%s,0"% (self.p1.id, self.p2.id)] if do_csv else ['"%s" -> "%s"' % (self.p1.id, self.p2.id), 'none']
         
     def chrono_length_days (self):
         if self.date1 and self.date2:
@@ -331,6 +346,12 @@ class patient:
         
     def add_naive (self, naive):
         self.naive = naive
+        
+    def get_followup_length (self, date):
+        if self.dates[0] is None:
+            return None
+        
+        return date - tm_to_datetime (min (self.dates))
                 
     def get_baseline_date (self, complete = False):
         if self.dates[0] is None:
@@ -349,12 +370,14 @@ class patient:
         return len(self.dates)
         
     def get_length_of_followup (self):
-        d1 = tm_to_datetime (self.dates[0])
-        if len (self.dates) > 1:
-            self.dates.sort()
-            d2 = tm_to_datetime(self.dates[-1])
-            return d2 - d1
-        return d1 - d1
+        if None not in self.dates:
+            d1 = tm_to_datetime (self.dates[0])
+            if len (self.dates) > 1:
+                self.dates.sort()
+                d2 = tm_to_datetime(self.dates[-1])
+                return d2 - d1
+        return datetime.timedelta (0)
+            
         
     def get_treatment_since_edi (self):
         if self.treatment_date != None and self.edi != None and self.treatment_date >= self.edi:
@@ -410,13 +433,18 @@ class transmission_network:
             formatter = parseAEH
         edgeReader = csv.reader(file_name)
         header = next(edgeReader)
-        if len (header) != 3:
-            raise IOError ('transmission_network.read_from_csv_file() : Expected a .csv file with 3 columns as input')
+        edgeAnnotations = {}
+        if len (header) < 3:
+            raise IOError ('transmission_network.read_from_csv_file() : Expected a .csv file with at least 3 columns as input')
         for line in edgeReader:
             distance = float(line[2])
             if distance_cut is not None and distance > distance_cut:
                 continue
-            self.add_an_edge(line[0],line[1],distance,formatter,default_attribute,bootstrap_mode)  
+            edge = self.add_an_edge(line[0],line[1],distance,formatter,default_attribute,bootstrap_mode) 
+            if edge is not None and len (line) > 3:
+                 edgeAnnotations[edge] = line[2:]
+                 
+        return edgeAnnotations
             
     def sample_from_network (self, how_many_nodes = 100, how_many_edges = None, node_sampling_bias = 0.0):
         if how_many_edges is not None:
@@ -584,7 +612,7 @@ class transmission_network:
                 node.add_vl (edi[node.id][4])
                 node.add_naive (edi[node.id][5])
                 
-                
+                 
     def randomize_attribute (self, attribute_value):
         count = 0
         for node in self.nodes:
@@ -620,7 +648,7 @@ class transmission_network:
             return self.nodes[pat_with_id]
         return None
 
-    def get_all_edges_linking_to_a_node  (self, id1, ignore_visible = False, use_direction = False, incoming = False, add_undirected = False, reduce_edges = True): 
+    def get_all_edges_linking_to_a_node  (self, id1, ignore_visible = False, use_direction = False, incoming = False, add_undirected = False, only_undirected = False, reduce_edges = True): 
         list_of_nodes = set()
         pat = patient (id1)
         for anEdge in self.edges if reduce_edges == False else self.reduce_edge_set():
@@ -629,17 +657,19 @@ class transmission_network:
                     if use_direction:
                         dir = anEdge.compute_direction()
                         if dir is not None:
+                            if only_undirected:
+                                continue
                             if ((not incoming and dir != pat) or (incoming and dir == pat)):            
                                 continue
-                        elif not add_undirected:
+                        elif not add_undirected and not only_undirected:
                             continue
                              
                     list_of_nodes.add (anEdge)
         return list_of_nodes
 
-    def get_node_neighborhood  (self, id1, ignore_visible = False, use_direction = False, incoming = False, add_undirected = False): 
+    def get_node_neighborhood  (self, id1, ignore_visible = False, use_direction = False, incoming = False, add_undirected = False, only_undirected = False): 
         list_of_nodes = set()
-        list_of_edges = self.get_all_edges_linking_to_a_node(id1,ignore_visible,use_direction, incoming, add_undirected)
+        list_of_edges = self.get_all_edges_linking_to_a_node(id1,ignore_visible,use_direction, incoming, add_undirected, only_undirected)
         pat = patient (id1)
         for anEdge in list_of_edges:
             if anEdge.p1 == pat:
@@ -663,7 +693,6 @@ class transmission_network:
         return edge_support
             
 
-
     def add_an_edge (self, id1, id2, distance, header_parser = None, edge_attribute = None, bootstrap_mode = False):        
         if header_parser == None:
             header_parser = parseAEH
@@ -681,7 +710,7 @@ class transmission_network:
         pid2 = self.make_sequence_key (patient2['id'],patient2['date'])
         if pid2 not in self.sequence_ids:
             self.sequence_ids [pid2] = patient2["rawid"]
-                    
+                             
         if not same:
             new_edge = edge (p1,p2,patient1['date'],patient2['date'],True, edge_attribute)
 
@@ -697,17 +726,13 @@ class transmission_network:
                         if k == new_edge:
                             k.update_attributes (edge_attribute)
                             break
-                    
- 
-#               for an_edge in self.edges:
-#                    if an_edge.__hash__() == new_edge.__hash__():
-#                        print ("%s -> %s" % (an_edge, new_edge))
-#                        break 
-    
+                     
                 if distance < self.edges [new_edge]:
-                    #print ('Edge update. New edge %s: %s' % (new_edge.p1, new_edge.p2))
                     self.edges [new_edge] = distance
                     
+            return new_edge
+        
+        return None            
                 
     def compute_adjacency (self,edges=False):
         self.adjacency_list = {}
@@ -819,7 +844,7 @@ class transmission_network:
         return {'count': counts['count'], 'samples' : counts, 'followup' : fup}
         
         
-    def get_edge_node_count (self):
+    def get_edge_node_count (self, attributes_to_check = None):
         vis_nodes = set ()
         edge_set  = set ()
         multiple_samples = []
@@ -832,6 +857,9 @@ class transmission_network:
                 edge_count += 1
                 for p in [edge.p1,edge.p2]:
                     if p not in vis_nodes:
+                        if attributes_to_check is not None: 
+                            if not attributes_to_check.issubset (p.attributes): 
+                                continue
                         vis_nodes.add (p)
                         if p.stage not in nodes_by_stage:
                             nodes_by_stage [p.stage] = 1
@@ -907,6 +935,18 @@ class transmission_network:
                 vis_count += edge.visible
         return vis_count
 
+    def apply_attribute_filter (self, attribute_value, do_clear = True, strict = False):
+        if do_clear : self.clear_adjacency()
+        vis_count = 0
+        for edge in self.edges:
+            if edge.visible:
+                if strict:
+                    edge.visible = edge.p1.has_attribute(attribute_value) and edge.p2.has_attribute(attribute_value)           
+                else:
+                    edge.visible = edge.p1.has_attribute(attribute_value) or edge.p2.has_attribute(attribute_value)           
+                vis_count += edge.visible
+        return vis_count
+
     def apply_cluster_filter (self, cluster_ids, exclude = True, do_clear = True): # exclude all sequences in a given cluster(s)
         if do_clear : self.clear_adjacency()
         vis_count = 0
@@ -933,7 +973,7 @@ class transmission_network:
             clusters [node.cluster_id].append (node)
             
         if not singletons:
-            clusters.pop (None)
+            clusters.pop (None,None)
         return clusters
             
     
@@ -993,7 +1033,7 @@ class transmission_network:
                 file.write ("%s,%d\n" % (self.sequence_ids[self.make_sequence_key (node.id, node.dates[0])],node.cluster_id))
                     
                 
-    def reduce_edge_set (self):
+    def reduce_edge_set (self, attribute_merge = True):
         byPairs = {}
         for anEdge in self.edges:
             patient_pair = (anEdge.p1, anEdge.p2)
@@ -1004,7 +1044,15 @@ class transmission_network:
         
         edge_set = set ()
         for patient_pair in byPairs:
-            edge_set.add (min (byPairs[patient_pair]))
+            representative_edge = min (byPairs[patient_pair])
+            if attribute_merge:
+                attribute_set = set ()
+                for an_edge in byPairs[patient_pair]:
+                    attribute_set = attribute_set.union (an_edge.attribute)
+                for attr in attribute_set:
+                    representative_edge.update_attributes(attr)
+                
+            edge_set.add (representative_edge)
         return edge_set
             
 
@@ -1046,6 +1094,26 @@ class transmission_network:
         file.write ("\n};")
         return directed
 
+    def generate_delimited (self, file, year_vis = None, reduce_edges = True):
+    
+        if self.adjacency_list is None:
+             self.compute_adjacency()
+           
+        file.write("%s\n"%','.join(['ID1','ID2','Linktype']))
+        for edge in self.edges if reduce_edges == False else self.reduce_edge_set():
+            if edge.visible:
+                distance = self.edges[edge]
+                
+              
+                edge_attr = edge.direction(do_csv=True)
+                
+                if year_vis is not None:
+                    if edge.check_date (year_vis) == False:                        
+                        continue
+                        
+                file.write ('%s\n' % (edge_attr[0]));
+
+
     def spool_pairwise_distances (self,file,baseline = False):
         file.write (','.join (['Seq1','Seq2','Distance']))
         file.write ('\n')
@@ -1056,7 +1124,7 @@ class transmission_network:
             file.write (','.join ([ext_edge.p1.id, ext_edge.p2.id, str(self.edges[ext_edge])]))
             file.write ('\n')
 
-    def get_node_degree_list (self, year_cap = None, do_direction = False, id_list = None):
+    def get_node_degree_list (self, year_cap = None, do_direction = False, id_list = None, attribute_selector = None):
         degree_list = {}
         self.clear_adjacency()
         self.compute_adjacency(do_direction)
@@ -1064,7 +1132,10 @@ class transmission_network:
         if id_list:
             id_list = [self.has_node_with_id(k) for k in id_list]
         else:
-            id_list = self.nodes
+            if attribute_selector is not None:
+                id_list = [k for k in self.nodes if k.has_attribute(attribute_selector)]
+            else:
+                id_list = self.nodes
             
         for node in id_list:
             if year_cap is not None and node.get_baseline_date() > year_cap:
@@ -1090,9 +1161,37 @@ class transmission_network:
                 
         return degree_list
         
-    def sample_subset    (self, size):
+    def sample_subset    (self, size, filter_attribute = None, use_connected_nodes = False):   
+        if use_connected_nodes:
+            self.compute_adjacency ()
+            if filter_attribute is not None:
+                random.sample ([n for n in self.adjacency_list if n.has_attribute(filter_attribute)], int (size))
+            return random.sample (list(self.adjacency_list), int (size))
+        if filter_attribute is not None:
+            random.sample ([n for n in self.nodes if n.has_attribute(filter_attribute)], int (size))
         return random.sample (list(self.nodes), int (size))
+            
         
+    def generate_random_edges (self, edge_count, only_new = True, node_set = None, default_attr = None, distance = 0.01):
+        edges_added = set ()
+        added = 0
+        if node_set is None:
+            node_set = list(self.nodes)
+
+        while added < edge_count:
+            n1, n2 = random.sample (node_set, 2)
+            added_edge = self.add_an_edge (n1.id, n2.id, distance, header_parser = parsePlain, edge_attribute = default_attr)
+            added += 1 if (added_edge is not None or not only_new) else 0
+            if added_edge:
+                edges_added.add (added_edge)
+            
+        return edges_added
+        
+    def delete_edge_subset (self, edges):
+        for an_edge in edges:
+            if an_edge in self.edges:
+                del self.edges[an_edge]
+                
     def sample_subset_year_list    (self, years):
         selected_nodes = set()
         if len (years) > len (self.nodes):
@@ -1128,7 +1227,10 @@ class transmission_network:
         elif degree_option == 'outdegree':
             all_deg = self.get_degree_distribution(outdegree=True)
         else:
-            all_deg = self.get_degree_distribution()
+            if degree_option is None:
+                all_deg = self.get_degree_distribution()
+            else:
+                all_deg = degree_option
             
         hy_instance.queuevar ('allDegs', all_deg)
         hy_instance.runqueue (batchfile = hbl_path)
@@ -1137,11 +1239,16 @@ class transmission_network:
         bic = {}
         p = {}
         fitted = {}
+        rho_ci = {}
         for name in ('Waring', 'Yule', 'Pareto', 'Negative Binomial'):
             try:
                 rho[name] = hy_instance.getvar (name,hy.HyphyInterface.NUMBER)
             except:
                 rho[name] = None
+            try:
+                rho_ci[name] = hy_instance.getvar (name + "_rho_ci",hy.HyphyInterface.MATRIX)
+            except:
+                rho_ci[name] = None
             try:
                 bic[name] = hy_instance.getvar (name + "_BIC",hy.HyphyInterface.NUMBER)
             except:
@@ -1154,9 +1261,9 @@ class transmission_network:
                 fitted[name] = hy_instance.getvar (name + "_PDF",hy.HyphyInterface.MATRIX)
             except:
                 fitted[name] = None
-        return {'Best' : bestDistro, 'rho': rho, 'BIC' : bic, 'p' : p, 'fitted': fitted, 'degrees': all_deg}
+        return {'Best' : bestDistro, 'rho': rho, 'BIC' : bic, 'p' : p, 'fitted': fitted, 'degrees': all_deg, 'rho_ci': rho_ci}
 
-    def simulate_treatment (self,treated_nodes, node_neighs_out, node_neighs_in, removal_rate = 1.):
+    def simulate_treatment (self,treated_nodes, node_neighs_out, node_neighs_in, node_neighs_undirected, removal_rate = 1.):
         removed_nodes = set()
         handled_nodes = set()
         new_nodes     = set(treated_nodes)            
@@ -1164,13 +1271,22 @@ class transmission_network:
         while True:
             for a_removed_node in removed_nodes:
                 if a_removed_node not in handled_nodes:
-                    nbhd = node_neighs_out[a_removed_node].difference(removed_nodes).difference(new_nodes)
-                    for nb_node in nbhd:
-                        potential_sources = node_neighs_in[nb_node] - removed_nodes - new_nodes
-                        potential_sources.add (a_removed_node)
-                        if random.random() <= 1./len(potential_sources):
-                            if nb_node not in treated_nodes or random.random () < removal_rate:
-                                new_nodes.add (nb_node)
+                    nbhd = (node_neighs_out[a_removed_node] - removed_nodes - new_nodes).union(node_neighs_undirected[a_removed_node])
+                    if (len (nbhd)) :
+                        sel = list (nbhd)
+                        random.shuffle(sel)
+                        for nb_node in sel:
+                            potential_sources = node_neighs_in[nb_node] - removed_nodes - new_nodes 
+                            local_undir       = node_neighs_undirected[nb_node] - removed_nodes - new_nodes 
+                            
+                            potential_sources.add (a_removed_node)
+                            pure_links = len (potential_sources)
+                            potential_sources = potential_sources.union(local_undir)
+                            src_count = 0.5*(len(potential_sources)+pure_links)
+                            
+                            if random.random() <= (0.5 if nb_node in node_neighs_undirected[a_removed_node] else 1.)/(src_count):
+                                if nb_node not in treated_nodes or random.random () < removal_rate:
+                                    new_nodes.add (nb_node)
                                                             
                     handled_nodes.add (a_removed_node)
                     
@@ -1184,7 +1300,6 @@ class transmission_network:
         return removed_nodes
         
     def get_degree_distribution (self, **kwargs):
-
         degree_distribution = []
         
         subset = None

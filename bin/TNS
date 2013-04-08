@@ -33,7 +33,7 @@ def print_tns (network, print_level = None):
                         index = 2
                     elif direction.id == a_node.id:
                         index = 1
-                        an_edge.update_attributes ('UDS')
+                        #an_edge.update_attributes ('UDS')
                     else:
                         index = 0
                     additional_edges [index] += 1
@@ -42,6 +42,9 @@ def print_tns (network, print_level = None):
             
                      
             print ("\t".join([a_node.id,str(base_date.tm_year),str(enrollment_edges),str(node_tns),str(additional_edges[1]), str(additional_edges[2])]))
+            if print_level is not None and node_tns >= print_level:
+                a_node.add_attribute('focus')
+            '''
             if print_level is not None and node_tns >= print_level:
                 #print (network.get_all_edges_linking_to_a_node (a_node.id,ignore_visible=False,use_direction=False))
                 a_node.add_attribute('focus')
@@ -53,6 +56,7 @@ def print_tns (network, print_level = None):
 
             for an_edge in all_edges:
                 an_edge.remove_attribute ('UDS')
+            '''
 
 
 #-------------------------------------------------------------------------------		
@@ -104,7 +108,12 @@ def import_edi (file):
 		if len (line[4]): # drugz
 			drug_date = time.strptime (line[4],'%m/%d/%Y')
 			
-		edi_date = None
+		edi_date  = None
+		stage = 'Chronic'
+		
+		if len (line [5]): # disease stage
+			stage = line[5]
+
 		if len (line [6]): # edi
 			edi_date = time.strptime (line[6],'%m/%d/%Y')
 			
@@ -129,7 +138,7 @@ def import_edi (file):
 		if len (line [8]): # vl
 			viral_load = int (line[8])
 			
-		edi_by_id [id] = [geno_date, drug_date, edi_date, viral_load, naive]
+		edi_by_id [id] = [geno_date, drug_date, stage, edi_date, viral_load, naive]
 		#print (edi_by_id[id])
 		#if (edi_date and drug_date and edi_date > drug_date):
 		#	print "Fail %s" % id, edi_date, drug_date
@@ -511,4 +520,4 @@ distro_fit = network.fit_degree_distribution ()
 print ("Best distribution is '%s' with rho = %g" % (distro_fit['Best'], distro_fit['rho'][distro_fit['Best']]))
 
 print_tns (network, 0.8)
-
+network.generate_dot (settings.dot)
