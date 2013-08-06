@@ -12,7 +12,7 @@ def describe_network (network):
     clusters = network.retrieve_clusters()
     print ("Found %d clusters" % len(clusters), file = sys.stderr)
     print ("Maximum cluster size = %d nodes" % max ([len (clusters[c]) for c in clusters if c is not None]), file = sys.stderr)
-    
+
     map = {'E-2.0'  : 'E-2',
            'E-2.0B' : 'E-2',
            'E-3.0'  : 'E-3',

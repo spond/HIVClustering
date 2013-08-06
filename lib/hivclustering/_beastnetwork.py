@@ -436,9 +436,14 @@ class transmission_network:
         edgeAnnotations = {}
         if len (header) < 3:
             raise IOError ('transmission_network.read_from_csv_file() : Expected a .csv file with at least 3 columns as input')
+            
+        handled_ids = set ()
+
         for line in edgeReader:
             distance = float(line[2])
             if distance_cut is not None and distance > distance_cut:
+                self.ensure_node_is_added (line[0], formatter, default_attribute, bootstrap_mode, handled_ids)
+                self.ensure_node_is_added (line[1], formatter, default_attribute, bootstrap_mode, handled_ids)
                 continue
             edge = self.add_an_edge(line[0],line[1],distance,formatter,default_attribute,bootstrap_mode) 
             if edge is not None and len (line) > 3:
@@ -446,6 +451,15 @@ class transmission_network:
                  
         return edgeAnnotations
             
+    def ensure_node_is_added (self, id1, header_parser, default_attribute, bootstrap_mode, cache):
+        if id1 not in cache:
+            cache.add (id1)
+            if header_parser == None:
+                header_parser = parseAEH
+        
+            patient1,attrib = header_parser (id1)
+            self.insert_patient (patient1['id'],patient1['date'], False, attrib)   
+             
     def sample_from_network (self, how_many_nodes = 100, how_many_edges = None, node_sampling_bias = 0.0):
         if how_many_edges is not None:
             if how_many_edges >= len (self.edges):
@@ -549,10 +563,8 @@ class transmission_network:
                         #print (node_pair[0].dates[0], node_pair[1].dates[0])
                         self.add_an_edge ("|".join ([node_pair[0].id,time.strftime("%m%d%Y",node_pair[0].dates[0])]), "|".join ([node_pair[1].id,time.strftime("%m%d%Y",node_pair[1].dates[0])]), 0.01, header_parser = parseAEH)
          
-    def create_a_pref_attachment_network (self, network_size = 100, random_attachment = 0.0, start_new_tree = 0.0, start_date = None, tick_rate = None):
-        
+    def create_a_pref_attachment_network (self, network_size = 100, random_attachment = 0.0, start_new_tree = 0.0, start_date = None, tick_rate = None):      
         attach_to = [1,2]
-        
         current_date = start_date
     
         self.insert_patient (str(1), datetime_to_tm(current_date), False, None)
@@ -613,15 +625,21 @@ class transmission_network:
                 node.add_naive (edi[node.id][5])
                 
                  
-    def randomize_attribute (self, attribute_value):
-        count = 0
-        for node in self.nodes:
-            if node.has_attribute (attribute_value): 
-                count += 1
-                node.remove_attribute (attribute_value)
+    def randomize_attribute (self, attribute_value, clusters = None):
+        if clusters is None:
+            partition = [self.nodes,]
+        else:
+            partition = clusters
+    
+        for subset in partition:
+            count = 0
+            for node in subset:
+                if node.has_attribute (attribute_value): 
+                    count += 1
+                    node.remove_attribute (attribute_value)
         
-        for node in random.sample (list(self.nodes), count):
-            node.add_attribute (attribute_value)
+            for node in random.sample (list(subset), count):
+                node.add_attribute (attribute_value)
 
     def edges_sharing_an_attribute (self, attribute_value = None, reduce_edges = True, ignore_visible = False): 
         #if attribute_value == None, then any shared attributes count
@@ -693,7 +711,7 @@ class transmission_network:
         return edge_support
             
 
-    def add_an_edge (self, id1, id2, distance, header_parser = None, edge_attribute = None, bootstrap_mode = False):        
+    def add_an_edge (self, id1, id2, distance, header_parser = None, edge_attribute = None, bootstrap_mode = False, node_only = False):        
         if header_parser == None:
             header_parser = parseAEH
             
@@ -701,8 +719,8 @@ class transmission_network:
         patient2,attrib = header_parser (id2)
         same = patient1['id'] == patient2['id']
         
-        p1 = self.insert_patient (patient1['id'],patient1['date'], not same, attrib)
-        p2 = self.insert_patient (patient2['id'],patient2['date'], not same, attrib)
+        p1 = self.insert_patient (patient1['id'],patient1['date'], not same and not node_only, attrib)
+        p2 = self.insert_patient (patient2['id'],patient2['date'], not same and not node_only, attrib)
         
         pid1 = self.make_sequence_key (patient1['id'],patient1['date'])
         if pid1 not in self.sequence_ids:
@@ -710,27 +728,24 @@ class transmission_network:
         pid2 = self.make_sequence_key (patient2['id'],patient2['date'])
         if pid2 not in self.sequence_ids:
             self.sequence_ids [pid2] = patient2["rawid"]
-                             
-        if not same:
-            new_edge = edge (p1,p2,patient1['date'],patient2['date'],True, edge_attribute)
-
-            #if abs (new_edge.date1.tm_year - new_edge.date2.tm_year) > 5:
-            #    print new_edge
             
-            if new_edge not in self.edges:
-                if not bootstrap_mode or edge_attribute is None: 
-                    self.edges [new_edge] = distance
-            else:    
-                if edge_attribute is not None:
-                    for k in self.edges:   
-                        if k == new_edge:
-                            k.update_attributes (edge_attribute)
-                            break
+        if node_only == False:                             
+            if not same:
+                new_edge = edge (p1,p2,patient1['date'],patient2['date'],True, edge_attribute)
+                if new_edge not in self.edges:
+                    if not bootstrap_mode or edge_attribute is None: 
+                        self.edges [new_edge] = distance
+                else:    
+                    if edge_attribute is not None:
+                        for k in self.edges:   
+                            if k == new_edge:
+                                k.update_attributes (edge_attribute)
+                                break
                      
-                if distance < self.edges [new_edge]:
-                    self.edges [new_edge] = distance
+                    if distance < self.edges [new_edge]:
+                        self.edges [new_edge] = distance
                     
-            return new_edge
+                return new_edge
         
         return None            
                 
@@ -997,6 +1012,18 @@ class transmission_network:
         return size_by_node
         
             
+    def drop_singleton_nodes (self):
+        if self.adjacency_list == None:
+            self.compute_adjacency ()
+        
+        drop_these = set ()
+        for a_node in self.nodes:
+            if a_node not in self.adjacency_list:
+                drop_these.add (a_node)
+        
+        for delete_me in drop_these:
+            del self.nodes[delete_me]
+
     def compute_clusters (self, singletons = False):
         if self.adjacency_list == None:
             self.compute_adjacency ()
