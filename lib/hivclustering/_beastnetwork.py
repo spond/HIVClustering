@@ -624,7 +624,31 @@ class transmission_network:
                 node.add_vl (edi[node.id][4])
                 node.add_naive (edi[node.id][5])
                 
-                 
+                
+    def clustering_coefficients (self, node_list = None):
+        clustering_coefficiencts = {}
+        
+        if self.adjacency_list is None:
+            self.compute_adjacency ()
+
+        if node_list is None:
+            node_list = self.adjacency_list.keys()
+        
+        precompute_neighborhoods = {}
+        for a_node in node_list:
+            precompute_neighborhoods[a_node] = set(self.get_node_neighborhood (a_node.id))
+        
+        for a_node in node_list:
+            if a_node in self.adjacency_list:
+                my_hbhd = precompute_neighborhoods[a_node]
+                nbhd_size = len (my_hbhd)
+                if nbhd_size > 1:
+                    edges_found = 0
+                    for nb_node in my_hbhd:
+                        edges_found += len(precompute_neighborhoods[nb_node].intersection (my_hbhd))
+                    clustering_coefficiencts [a_node] = float(edges_found) / nbhd_size / (nbhd_size-1)
+        return clustering_coefficiencts
+            
     def randomize_attribute (self, attribute_value, clusters = None):
         if clusters is None:
             partition = [self.nodes,]
@@ -1199,14 +1223,27 @@ class transmission_network:
         return random.sample (list(self.nodes), int (size))
             
         
-    def generate_random_edges (self, edge_count, only_new = True, node_set = None, default_attr = None, distance = 0.01):
+    def generate_random_edges (self, edge_count, only_new = True, node_set = None, default_attr = None, distance = 0.01, use_preferential_attachment = False):
         edges_added = set ()
         added = 0
         if node_set is None:
             node_set = list(self.nodes)
+        
+        if use_preferential_attachment:
+            sample_from = list ()
+            if self.adjacency_list is None:
+                self.compute_adjacency ()
+            for a_node in node_set:
+                upto = max(1,len(self.adjacency_list[a_node])) if a_node in self.adjacency_list else 1
+                for k in range (upto):
+                    sample_from.append (a_node)
+        else:
+            sample_from = node_set
+
 
         while added < edge_count:
-            n1, n2 = random.sample (node_set, 2)
+            n1, n2 = random.sample (sample_from, 2)
+            if n1 == n2: continue
             added_edge = self.add_an_edge (n1.id, n2.id, distance, header_parser = parsePlain, edge_attribute = default_attr)
             added += 1 if (added_edge is not None or not only_new) else 0
             if added_edge:
