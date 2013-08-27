@@ -3,6 +3,7 @@
 import datetime, time, random, itertools, operator, re
 from math import log
 from copy import copy, deepcopy
+from bisect import bisect_left
 import hppy as hy
 import os
 import csv
@@ -329,6 +330,9 @@ class patient:
     def add_edi  (self, edi):
         self.edi = edi
 
+    def get_edi (self):
+        return self.edi
+
     def add_stage  (self, stage):
         self.stage = stage
 
@@ -341,9 +345,39 @@ class patient:
     def set_label (self, l):
         self.label = l
         
-    def add_vl (self, vl):
-        self.vl = vl
+    def add_vl (self, vl, date = None):
+        if self.vl is None:
+            self.vl = []
+               
+        for k in range (len (self.vl)):
+            if self.vl[k][0] is not None and self.vl[k][0] > date:
+                self.vl.insert (k, [date, float(vl)])
+                return None
         
+         
+        self.vl.append ([date, float(vl)])
+        
+        
+    def get_vl_by_date (self, date):
+        if self.vl is not None:
+            if len  (self.vl):
+                idx = bisect_left ([d[0] for d in self.vl], date)
+                if idx == len (self.vl):
+                    return self.vl [idx-1]
+                if idx > 0 and idx < len (self.vl):
+                    if (date-self.vl[idx-1][0] < self.vl[idx][0]-date):
+                        return self.vl [idx-1]
+            
+                return self.vl [idx]
+                
+        return None
+        
+    def get_vl (self, date = None):
+        if self.vl is not None and len (self.vl):
+            return sum ([v[1] for v in self.vl]) / float (len (self.vl))
+            
+        return None
+
     def add_naive (self, naive):
         self.naive = naive
         
@@ -397,7 +431,7 @@ class patient:
     
         shape = 'ellipse' 
         color = 'white'
-        label = str(self.vl) if self.vl != None else ""
+        label = str(get_vl()) if self.get_vl() is not None else ""
         
         edi_info = self.get_treatment_since_edi()
         
@@ -624,6 +658,20 @@ class transmission_network:
                 node.add_vl (edi[node.id][4])
                 node.add_naive (edi[node.id][5])
                 
+    def add_edi_json  (self, edi):
+        for pid in edi:
+            p = patient (pid)
+            if p in self.nodes:
+                node = self.nodes[p]
+                edi_record = edi[pid]
+                if 'Stage' in edi_record: 
+                    node.add_stage (edi_record['Stage'])
+                if 'EDI' in edi_record:
+                    node.add_edi (edi_record['EDI'])
+                if 'VL' in edi_record:
+                    for vl_record in edi_record['VL']:
+                        node.add_vl (vl_record[1], vl_record[0])
+            
                 
     def clustering_coefficients (self, node_list = None):
         clustering_coefficiencts = {}

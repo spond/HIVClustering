@@ -147,13 +147,33 @@ def import_edi (file):
 
 #-------------------------------------------------------------------------------		
 
-def get_dot_string_vl (self, year_vis = None):    
+
+def hex_grb_to_triplets (rgb):
+    rgb3 = [0.,0.,0.]
+    rgb3 [0] = int (rgb[0:2], 16)
+    rgb3 [1] = int (rgb[2:4], 16)
+    rgb3 [2] = int (rgb[4:6], 16)
+    return rgb3
+    
+
+def interpolate_rgb_hex (fromC, toC, slider = 0.5):
+    c1 = hex_grb_to_triplets (fromC)
+    c2 = hex_grb_to_triplets (toC)
+    
+    c1 = [floor(c1[k] * (1-slider) + c2 [k] * (slider)) for k in range (3)] 
+    
+    return '#%02x%02x%02x' % (c1[0],c1[1],c1[2])
+
+#-------------------------------------------------------------------------------		
+
+def get_dot_string_vl (self, year_vis = None, tns = None):    
     if 'focus' in self.attributes:
         shape = 'doublecircle'
     else:
         shape = 'circle' 
     color = 'white'
     label = ''#time.strftime("%b %Y", self.get_baseline_date(True))
+
     
     edi_info = self.get_treatment_since_edi()
     
@@ -167,15 +187,19 @@ def get_dot_string_vl (self, year_vis = None):
     '''
     
     
-    if self.get_sample_count() > 1:
-        label = str(self.get_sample_count())
+    #if self.get_sample_count() > 1:
+    #    label = str(self.get_sample_count())
         
 
 
     color = 'white'
     
-    if self.vl is not None:
-       color = '/reds9/%d' % (round(log10 (self.vl)))
+    if tns is not None:
+        if self.id in tns:
+            color = interpolate_rgb_hex ('FFFFFF','FF0000',tns[self.id])
+    else:
+        if self.get_vl() is not None:
+            color = '/reds9/%d' % (round(log10 (self.get_vl())))
         
     if 'treated' in self.attributes:
         shape = 'triangle'
@@ -193,22 +217,59 @@ def get_dot_string_vl (self, year_vis = None):
 
 #-------------------------------------------------------------------------------		
 
-def generate_dot_454 (self, file, year_vis = None, reduce_edges = True):
-    file.write ('digraph G { overlap="prism100";\n outputorder = edgesfirst;\nnode[style=filled];\n');
+def generate_dot_tns (self, file, tns = None, year_vis = None, reduce_edges = True):
+    file.write ('digraph G { overlap="prism1000"; sep = "+8"; \n outputorder = edgesfirst;\nnode[style=filled];\n');
     nodes_drawn = {}
     
     directed = {'undirected':0, 'directed':0}
+    
+    tns_vl = {}
     
     for edge in self.edges if reduce_edges == False else self.reduce_edge_set():
         if edge.visible:
             distance = self.edges[edge]
             
+            p1 = network.nodes[edge.p1]
+            p2 = network.nodes[edge.p2]
+                
+            edi1 = tm_to_datetime(p1.get_edi()) 
+            edi2 = tm_to_datetime(p2.get_edi())
+            
+            transmission_date = None
+            
+            vl1 = None
+            vl2 = None
+            
+            if edi1 is not None and edi2 is not None:
+                if edi1 < edi2:
+                   transmission_date = edi2
+                else:
+                   transmission_date = edi1
+            else:
+                if edge.date1 is not None and edge.date2 is not None:    
+                    ed1 = tm_to_datetime (edge.date1)
+                    ed2 = tm_to_datetime (edge.date2)
+                    if ed2 > ed1:
+                        transmission_date = ed2
+                    else:
+                        transmission_date = ed1
+                        
+            
+            if transmission_date is not None:
+                vl1 = p1.get_vl_by_date (transmission_date)
+                vl2 = p2.get_vl_by_date (transmission_date)
+                if vl1 is not None and abs (vl1[0]-transmission_date) > datetime.timedelta (365):
+                    vl1 = None
+                if vl2 is not None and abs (vl2[0]-transmission_date) > datetime.timedelta (365):
+                    vl2 = None
+                
+                    
             if edge.p1 not in nodes_drawn:
                 nodes_drawn[edge.p1] = edge.p1.get_baseline_date()
-                file.write (edge.p1.get_dot_string(year_vis))
+                file.write (edge.p1.get_dot_string(year_vis,tns))
             if edge.p2 not in nodes_drawn:
                 nodes_drawn[edge.p2] = edge.p2.get_baseline_date()
-                file.write (edge.p2.get_dot_string(year_vis))
+                file.write (edge.p2.get_dot_string(year_vis,tns))
             
             year_diff = abs(edge.date1.tm_year - edge.date2.tm_year)
             if isinstance(edge.compute_direction(),type(None)):
@@ -217,15 +278,39 @@ def generate_dot_454 (self, file, year_vis = None, reduce_edges = True):
                 directed ['directed'] += 1
             edge_attr = edge.direction()
             
+            source_p = edge.compute_direction()
+            if source_p is not None:
+                if source_p == p1:
+                    source_vl = vl1
+                else:
+                    source_vl = vl2
+            else:
+                source_vl = None
+                
+            if source_p and source_vl and tns:
+                if source_p.id not in tns_vl:
+                    tns_vl [source_p.id] = {'TNS': tns[source_p.id] if source_p.id in tns else 0.0,
+                                            'VL' : [] }
+                                            
+                tns_vl [source_p.id]['VL'].append (source_vl[1])
+            
             if year_vis is not None:
                 if edge.check_date (year_vis) == False:
                     file.write ('%s [style="invis" arrowhead = "%s"];\n' % (edge_attr[0], edge_attr[1]));
                     continue
-                    
-            color = 'red' if edge.has_attribute ('UDS') else 'black'   
-            file.write ('%s [style="bold" color = "%s" label = "%s" arrowhead = "%s"];\n' % (edge_attr[0], color, edge.label(), edge_attr[1]));
+             
+            pw = 2 
+            if source_vl is not None:  
+                color = interpolate_rgb_hex ('FFFFFF','0000FF',min (1, log10 (source_vl[1])/6.))
+                pw = 5
+            else:
+                color = 'red' if edge.has_attribute ('UDS') else 'grey'   
+            file.write ('%s [style="bold" color = "%s" label = "%s" arrowhead = "%s" penwidth = "%d"];\n' % (edge_attr[0], color, edge.label(), edge_attr[1], pw));
 
-    file.write ("\n};")
+    file.write ("\n}")
+    print ("ID,TNS,VL")
+    for i,v in tns_vl.items():
+        print (i, ",", v['TNS'], ",", sum (v['VL'])/len (v['VL'])) 
     return directed    
  
 #-------------------------------------------------------------------------------		
@@ -367,121 +452,21 @@ def compute_tns (network, year_from, year_to, distance = 0.015, fitted = None, o
                
 #-------------------------------------------------------------------------------		
 
+from networkbuild import *
+
+network.generate_dot = generate_dot_tns
 patient.get_dot_string = get_dot_string_vl
-transmission_network.generate_dot = generate_dot_454
 
-random.seed ()
+distro_fit = describe_network (network)
+network.drop_singleton_nodes ()
 
-arguments = argparse.ArgumentParser(description='Read filenames.')
+precomputed_tns = {}
 
-arguments.add_argument('-i', '--input',   help = 'Input CSV file with inferred genetic links (or stdin if omitted). Must be a CSV file with three columns: ID1,ID2,distance.')
-arguments.add_argument('-u', '--uds',   help = 'Input CSV file with UDS data. Must be a CSV file with three columns: ID1,ID2,distance.')
-arguments.add_argument('-d', '--dot',   help = 'Output DOT file for GraphViz (or stdout if omitted)')
-arguments.add_argument('-c', '--cluster', help = 'Output a CSV file with cluster assignments for each sequence', required = True)
-arguments.add_argument('-t', '--threshold', help = 'Only count edges where the distance is less than this threshold')
-arguments.add_argument('-e', '--edi',   help = 'A .csv file with EDI dates')
-arguments.add_argument('-f', '--format',   help = 'Sequence ID format. One of AEH (ID | sample_date | otherfiels default), LANL (e.g. B_HXB2_K03455_1983 : subtype_country_id_year -- could have more fields), plain (treat as sequence ID only, no meta)')
-arguments.add_argument('-x', '--exclude',   help = 'Exclude any sequence which belongs to a cluster containing a "reference" strain, defined by the year of isolation. The value of this argument is an integer year (e.g. 1983) so that any sequence isolated in or before that year (e.g. <=1983) is considered to be a lab strain. This option makes sense for LANL or AEH data.')
-
-settings = arguments.parse_args()
-
-if settings.input == None:
-	settings.input = sys.stdin
-else:
-	try:
-		settings.input = open (settings.input, 'r')
-	except IOError:
-		print ("Failed to open '%s' for reading" % (settings.input))
-		raise
-	
-if settings.dot == None:
-	settings.dot = sys.stdout
-else:
-	try:
-		settings.dot = open (settings.dot, 'w')
-	except IOError:
-		print ("Failed to open '%s' for writing" % (settings.dot))
-		raise
-		
-	
-edi = None
-
-if settings.edi is not None:
-	try:
-		settings.edi = open (settings.edi, 'r')
-		edi = import_edi (settings.edi)
-	except IOError:
-		print ("Failed to open '%s' for reading" % (settings.edi))
-		raise
-
-try:
-	settings.cluster = open (settings.cluster, 'w')
-except IOError:
-	print ("Failed to open '%s' for writing" % (settings.cluster))
-	raise
-	
-formatter = parseAEH
-
-if settings.format is not None:
-	formats = {"AEH" : parseAEH, "LANL": parseLANL, "plain": parsePlain}
-	try:
-		formatter = formats[settings.format]
-	except KeyError:
-		print ("%s is not a valid setting for 'format' (must be in %s)" % (settings.edi,str(list(formats.keys()))))
-		raise
-		
-if settings.exclude is not None:
-	try:
-		settings.exclude = datetime.datetime (int (settings.exclude), 12, 31)	
-	except ValueError:
-		print ("Invalid contaminant threshold year '%s'" % (settings.exclude))
-		raise 
-
-
-if settings.threshold is not None:
-	settings.threshold = float (settings.threshold)
-
-
-if settings.uds is not None:
-	try:
-		settings.uds = open (settings.uds, 'r')
-	except IOError:
-		print ("Failed to open '%s' for reading" % (settings.uds))
-		raise
-		
-network         = transmission_network ()
-network.read_from_csv_file (settings.input, formatter, settings.threshold)
-
-
-if settings.uds:
-    network.read_from_csv_file (settings.uds, formatter, settings.threshold, 'UDS')
-
-network_stats = network.get_edge_node_count ()
-sys.setrecursionlimit(max(sys.getrecursionlimit(),network_stats['nodes']))	 
-
-if edi is not None:	 
-    network.add_edi (edi)
-    print ("Added edi information to %d nodes" % len ([k for k in network.nodes if k.edi is not None]))
-   
-
-network.compute_clusters()
-clusters = network.retrieve_clusters ()
-
-if settings.exclude is not None:
-	remove_these_ids = []
-	for c in clusters:
-		for node in clusters[c]:
-			if tm_to_datetime (node.dates[0]) <= settings.exclude:
-				if node.cluster_id not in remove_these_ids:
-					remove_these_ids.append(node.cluster_id)
-		
-	print ("Removing %d clusters with contaminant sequences" % len (remove_these_ids))
-	network.apply_cluster_filter (remove_these_ids)
-	network.compute_clusters()
-	clusters = network.retrieve_clusters ()
-	
-network_stats = network.get_edge_node_count ()
-print ("%d edges on %d nodes\n" % (network_stats['edges'], network_stats['nodes']))
+with open ('data/TNS_new.txt', 'r') as tns_fh:
+    tns_reader = csv.reader (tns_fh,delimiter = '\t')
+    next(tns_reader)
+    for k in tns_reader:
+        precomputed_tns [k[0]] = float (k[3])
 
 if settings.threshold is None: 
     print ("%d nodes with multiple dates" % len (network_stats['multiple_dates']))
@@ -513,11 +498,10 @@ clusters = network.retrieve_clusters()
 print ("Found %d clusters" % len(clusters), file = sys.stderr)
 print ("Maximum cluster size = %d nodes" % max ([len (clusters[c]) for c in clusters if c is not None]), file = sys.stderr)
 
-
 print ("Fitting the degree distribution to various densities", file = sys.stderr)
 #print (network.get_degree_distribution())
 distro_fit = network.fit_degree_distribution ()
 print ("Best distribution is '%s' with rho = %g" % (distro_fit['Best'], distro_fit['rho'][distro_fit['Best']]))
 
-print_tns (network, 0.8)
-network.generate_dot (settings.dot)
+#print_tns (network, 0.8)
+network.generate_dot (network, settings.dot, tns = precomputed_tns)
