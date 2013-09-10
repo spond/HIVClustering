@@ -7,11 +7,11 @@ from hivclustering import *
 
 
 def print_tns (network, print_level = None):
-    print ("\t".join(['ID','Year','BaselineDegree','TNS','Outbound','Undirected']))
+    print ("\t".join(['ID','Year','BaselineDegree','TNS','Outbound_1st','Undirected_1st','Outbound_after1st','Undirected_after1st','BaselineSequence','BaselineVLDate','BaselineVL']))
     
     for a_node in network.nodes:
         base_date = a_node.get_baseline_date (complete = True)
-        if base_date.tm_year >= 2005 and base_date.tm_year < 2011:
+        if base_date.tm_year >= 2005 and base_date.tm_year < 2012:
             base_date_plus_one = datetime.date.timetuple(tm_to_datetime(base_date) + datetime.timedelta (days = 365))
             network.clear_filters()
             network.apply_exact_date_filter (base_date)
@@ -22,26 +22,33 @@ def print_tns (network, print_level = None):
             all_edges = network.get_all_edges_linking_to_a_node (a_node.id,ignore_visible=True,use_direction=False)
             
             enrollment_edges = 0
-            additional_edges = [0,0,0] # in, out, undirected
+            additional_edges = [0,0,0,0,0,0] # in, out, undirected
             
             for an_edge in all_edges:
                 if an_edge.check_exact_date (base_date):
                     enrollment_edges += 1
-                elif an_edge.check_exact_date (base_date_plus_one):
+                else:
+                    base_index = 0 if an_edge.check_exact_date (base_date_plus_one) else 3
                     direction = an_edge.compute_direction()
                     if direction is None:
-                        index = 2
+                        index = base_index + 2
                     elif direction.id == a_node.id:
-                        index = 1
+                        index = base_index + 1
                         #an_edge.update_attributes ('UDS')
                     else:
-                        index = 0
+                        index = base_index + 0
                     additional_edges [index] += 1
                                     
             node_tns   = tns (enrollment_edges, None, distro_fit['fitted'][distro_fit['Best']])
             
+            vl = a_node.get_vl_by_date (tm_to_datetime(base_date))
+            if vl is None:
+                vl = ['NULL','NULL']
+            else:
+                vl = [vl[0].strftime("%Y%m%d"), str(vl[1])]
+            base_seq = tm_to_datetime(base_date).strftime("%Y%m%d")
                      
-            print ("\t".join([a_node.id,str(base_date.tm_year),str(enrollment_edges),str(node_tns),str(additional_edges[1]), str(additional_edges[2])]))
+            print ("\t".join([a_node.id,str(base_date.tm_year),str(enrollment_edges),str(node_tns),str(additional_edges[1]), str(additional_edges[2]),str(additional_edges[4]), str(additional_edges[5]), base_seq, vl[0], vl[1]]))
             if print_level is not None and node_tns >= print_level:
                 a_node.add_attribute('focus')
             '''
@@ -225,6 +232,8 @@ def generate_dot_tns (self, file, tns = None, year_vis = None, reduce_edges = Tr
     
     tns_vl = {}
     
+    print ("\t".join(['ID', 'BASELINE', 'EDI', 'ARV_DATE', 'EDGE_DATE', 'TREATMENT_SINCE_EDI', 'IS_AFTER_ART']))
+
     for edge in self.edges if reduce_edges == False else self.reduce_edge_set():
         if edge.visible:
             distance = self.edges[edge]
@@ -271,33 +280,45 @@ def generate_dot_tns (self, file, tns = None, year_vis = None, reduce_edges = Tr
                 nodes_drawn[edge.p2] = edge.p2.get_baseline_date()
                 file.write (edge.p2.get_dot_string(year_vis,tns))
             
-            year_diff = abs(edge.date1.tm_year - edge.date2.tm_year)
+            if year_vis is not None:
+                if edge.check_date (year_vis) == False:
+                    file.write ('%s [style="invis" arrowhead = "%s"];\n' % (edge_attr[0], edge_attr[1]));
+                    continue
+
             if isinstance(edge.compute_direction(),type(None)):
                 directed ['undirected'] += 1
             else:
                 directed ['directed'] += 1
+                
             edge_attr = edge.direction()
-            
             source_p = edge.compute_direction()
+
+            if source_p is not None:
+                source_d = tm_to_datetime(source_p.get_baseline_date(True))
+                print ("\t".join([source_p.id, source_d.strftime("%Y-%m-%d"), tm_to_datetime(source_p.get_edi()).strftime ("%Y-%m-%d") if source_p.get_edi() else 'NA',  tm_to_datetime(source_p.treatment_date).strftime ("%Y-%m-%d") if source_p.treatment_date else 'NA', transmission_date.strftime ("%Y-%m-%d"), str(source_p.get_treatment_since_edi().days) if source_p.get_treatment_since_edi() is not None else 'NA', str(tm_to_datetime(source_p.treatment_date)<transmission_date) if source_p.treatment_date else 'NA']))
+
             if source_p is not None:
                 if source_p == p1:
                     source_vl = vl1
                 else:
                     source_vl = vl2
+                    
             else:
                 source_vl = None
                 
-            if source_p and source_vl and tns:
-                if source_p.id not in tns_vl:
-                    tns_vl [source_p.id] = {'TNS': tns[source_p.id] if source_p.id in tns else 0.0,
-                                            'VL' : [] }
+            if source_p and source_vl and tns and transmission_date :
+                base_date = source_p.get_baseline_date (complete = True)
+                if transmission_date - tm_to_datetime(base_date) <= datetime.timedelta (365): 
+                    if source_p.id not in tns_vl:
+                        tns_vl [source_p.id] = {'TNS': tns[source_p.id] if source_p.id in tns else 0.0,
+                                                'VL' : [],
+                                                'TD' :  transmission_date.strftime("%Y%m%d"),
+                                                'VD' : []
+                                                }
                                             
-                tns_vl [source_p.id]['VL'].append (source_vl[1])
+                    tns_vl [source_p.id]['VL'].append (source_vl[1])
+                    tns_vl [source_p.id]['VD'].append (source_vl[0])
             
-            if year_vis is not None:
-                if edge.check_date (year_vis) == False:
-                    file.write ('%s [style="invis" arrowhead = "%s"];\n' % (edge_attr[0], edge_attr[1]));
-                    continue
              
             pw = 2 
             if source_vl is not None:  
@@ -308,9 +329,9 @@ def generate_dot_tns (self, file, tns = None, year_vis = None, reduce_edges = Tr
             file.write ('%s [style="bold" color = "%s" label = "%s" arrowhead = "%s" penwidth = "%d"];\n' % (edge_attr[0], color, edge.label(), edge_attr[1], pw));
 
     file.write ("\n}")
-    print ("ID,TNS,VL")
+    print ("ID,TNS,VL,Transmission,ViralLoad")
     for i,v in tns_vl.items():
-        print (i, ",", v['TNS'], ",", sum (v['VL'])/len (v['VL'])) 
+        print (", ".join([str(k) for k in [i, v['TNS'], sum (v['VL'])/len (v['VL']),v['TD'],"|".join([k.strftime('%Y%m%d') for k in v['VD']])]]))
     return directed    
  
 #-------------------------------------------------------------------------------		
@@ -458,7 +479,37 @@ network.generate_dot = generate_dot_tns
 patient.get_dot_string = get_dot_string_vl
 
 distro_fit = describe_network (network)
-network.drop_singleton_nodes ()
+#network.drop_singleton_nodes ()
+
+
+early_t = network.get_all_treated_within_range(datetime.timedelta(days = 7*12))
+print ('\t'.join (['ID','EDI','ART','DIFF']))
+for n in early_t:
+    print ("\t".join([n.id, tm_to_datetime(n.get_edi()).strftime ("%Y-%m-%d"), tm_to_datetime(n.treatment_date).strftime ("%Y-%m-%d"), str(n.get_treatment_since_edi().days)]))
+    n.add_attribute ('eART')
+    
+e_cnt = len (early_t)
+
+for k,v in network.get_node_degree_list(attribute_selector = 'eART',do_direction = True).items():
+    print (k,v[0]+v[1])
+
+obs = e_cnt + sum([k[0] + k[1] for k in list(network.get_node_degree_list(attribute_selector = 'eART',do_direction = True).values())])    
+print (obs)
+p  = 0
+
+sim_degrees = []
+
+for k in range (1000):
+    network.randomize_attribute ('eART', None)
+    sim_degrees.append (e_cnt + sum([k[0] + k[1] for k in list(network.get_node_degree_list(attribute_selector = 'eART',do_direction = True).values())]))
+    if sim_degrees[-1] <= obs:
+        p += 1
+     
+    
+print ("EARLY ART degrees:" , describe_vector(sim_degrees), p/(k+1.), e_cnt)
+sys.exit(0)
+
+#print_tns (network, 0.8)
 
 precomputed_tns = {}
 
@@ -467,7 +518,7 @@ with open ('data/TNS_new.txt', 'r') as tns_fh:
     next(tns_reader)
     for k in tns_reader:
         precomputed_tns [k[0]] = float (k[3])
-
+        
 if settings.threshold is None: 
     print ("%d nodes with multiple dates" % len (network_stats['multiple_dates']))
     minfo = network.report_multiple_samples (network_stats['multiple_dates'])
@@ -504,4 +555,6 @@ distro_fit = network.fit_degree_distribution ()
 print ("Best distribution is '%s' with rho = %g" % (distro_fit['Best'], distro_fit['rho'][distro_fit['Best']]))
 
 #print_tns (network, 0.8)
+network.apply_date_filter( 2005, True, True)
+network.apply_date_filter( 2012, False, False)
 network.generate_dot (network, settings.dot, tns = precomputed_tns)

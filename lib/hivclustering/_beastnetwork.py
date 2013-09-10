@@ -671,6 +671,8 @@ class transmission_network:
                 if 'VL' in edi_record:
                     for vl_record in edi_record['VL']:
                         node.add_vl (vl_record[1], vl_record[0])
+                if 'ARV' in edi_record:
+                    node.add_treatment (edi_record['ARV'])
             
                 
     def clustering_coefficients (self, node_list = None):
@@ -962,12 +964,12 @@ class transmission_network:
         
         return {'edges': len(edge_set), 'nodes': len(vis_nodes), 'total_edges': edge_count, 'multiple_dates':[[k[0],k[1].days] for k in multiple_samples], 'total_sequences': len(vis_nodes) + sum([k[0] for k in multiple_samples]) - len(multiple_samples), 'stages' : nodes_by_stage }
                 
-    def clear_adjacency (self):
+    def clear_adjacency (self, clear_filter = True):
         if self.adjacency_list is not None:
             del self.adjacency_list
             self.adjacency_list = None    
-            for edge in self.edges:
-                edge.visible = True
+            if clear_filter:
+                self.clear_filters()
 
         
     def apply_disease_stage_filter  (self, stages, do_clear = True, do_exclude = False):
@@ -1223,9 +1225,9 @@ class transmission_network:
             file.write (','.join ([ext_edge.p1.id, ext_edge.p2.id, str(self.edges[ext_edge])]))
             file.write ('\n')
 
-    def get_node_degree_list (self, year_cap = None, do_direction = False, id_list = None, attribute_selector = None):
+    def get_node_degree_list (self, year_cap = None, do_direction = False, id_list = None, attribute_selector = None, clear_filters = True):
         degree_list = {}
-        self.clear_adjacency()
+        self.clear_adjacency(clear_filter = clear_filters)
         self.compute_adjacency(do_direction)
         
         if id_list:

@@ -1,238 +1,37 @@
 #!/usr/bin/env python3.2
 
-import csv, argparse, sys, datetime, time, random, os.path
+import json
 from hivclustering import *
+from networkbuild import *
 
-#-------------------------------------------------------------------------------		
-
-def import_edi (file):
-	edi_by_id = {}
-	ediReader = csv.reader(file)
-	header = next(ediReader)
-	if len (header) != 14:
-		raise Exception ('Expected a .csv file with 14 columns as input')
-	
-	for line in ediReader:
-		if len (line[1]): # has PID
-			id = line[1].replace ('-','')
-		else:
-			id = line[0]
-		
-		geno_date = None
-		if len (line[2]): # geno
-			geno_date = time.strptime (line[2],'%m/%d/%Y')
-		
-		
-		drug_date = None
-		if len (line[4]): # drugz
-			drug_date = time.strptime (line[4],'%m/%d/%Y')
-			
-		edi_date = None
-		if len (line [6]): # edi
-			edi_date = time.strptime (line[6],'%m/%d/%Y')
-			
-		naive 	 = False
-		if line[3] == 'ARV Naive':
-			naive = True
-			
-		if geno_date and edi_date:
-			if edi_date > geno_date:
-				#print time.mktime(edi_date) - time.mktime(geno_date)
-				
-				part1 = time.strftime ("%m/%d",edi_date)
-				part2 = time.strftime ("%Y",geno_date)
-				new_edi_date = time.strptime ("/".join((part1,part2)),'%m/%d/%Y')
-				#edi_date.tm_year = geno_date.tm_year
-				if new_edi_date > geno_date:
-					continue
-				else:	
-					edi_date = new_edi_date
-				
-		viral_load = None
-		if len (line [8]): # vl
-			viral_load = int (line[8])
-			
-		edi_by_id [id] = [geno_date, drug_date, edi_date, viral_load, naive]
-		#if (edi_date and drug_date and edi_date > drug_date):
-		#	print "Fail %s" % id, edi_date, drug_date
-		
-	return edi_by_id
-	
-#-------------------------------------------------------------------------------		
-
-def split_nodes_by_year (nodes):
-	by_year = {}
-	for node in nodes:
-		year = node.get_baseline_date ()
-		if year not in by_year:
-			by_year [year] = [node]
-		else:
-			by_year [year].append (node)
-	return by_year
-
-#-------------------------------------------------------------------------------		
-
-def match_sample_by_year (case, control):
-	by_year_case    = split_nodes_by_year (case)
-	by_year_control = split_nodes_by_year (control)
-	
-	matched_sample  = []
-	
-	for k in by_year_case:
-		for k2 in random.sample(by_year_control[k], min(len(by_year_case[k]),len(by_year_control[k]))):
-			matched_sample.append (k2)
-			
-	return matched_sample
-	
-#-------------------------------------------------------------------------------		
-
-def degree_to_list (deg,shift = False):
-	listed = []
-	for k in range (len(deg)):
-		for z in range (deg[k]):
-			listed.append(k + (1 if shift else 0))
-	return listed
-	
-
-
-#-------------------------------------------------------------------------------		
-
-random.seed ()
-
-arguments = argparse.ArgumentParser(description='Read filenames.')
-
-arguments.add_argument('-i', '--input',   help = 'Input CSV file with inferred genetic links (or stdin if omitted). Must be a CSV file with three columns: ID1,ID2,distance.')
-arguments.add_argument('-d', '--dot',   help = 'Output DOT file for GraphViz (or stdout if omitted)')
-arguments.add_argument('-c', '--cluster', help = 'Output a CSV file with cluster assignments for each sequence', required = True)
-arguments.add_argument('-t', '--threshold', help = 'Only count edges where the distance is less than this threshold')
-arguments.add_argument('-e', '--edi',   help = 'A .csv file with EDI dates')
-arguments.add_argument('-f', '--format',   help = 'Sequence ID format. One of AEH (ID | sample_date | otherfiels default), LANL (e.g. B_HXB2_K03455_1983 : subtype_country_id_year -- could have more fields), plain (treat as sequence ID only, no meta)', choices = ('AEH', 'LANL', 'plain'), default = 'AEH')
-arguments.add_argument('-x', '--exclude',   help = 'Exclude any sequence which belongs to a cluster containing a "reference" strain, defined by the year of isolation. The value of this argument is an integer year (e.g. 1983) so that any sequence isolated in or before that year (e.g. <=1983) is considered to be a lab strain. This option makes sense for LANL or AEH data.')
-
-settings = arguments.parse_args()
-
-if settings.input == None:
-	settings.input = sys.stdin
+if settings.json:
+    network_info = describe_network (network, True)
+    nodes = []
+    cluster_info = network.retrieve_clusters ()
+    node_idx = {}
+    
+    for idx,cluster in cluster_info.items():
+        for n in cluster:
+           nodes.append ({'id': n.id, 'cluster' : idx, 'attributes': list (n.attributes), 'edi': n.get_edi(), 'baseline': n.get_baseline_date(True)}) 
+           node_idx [n] = len (nodes)-1
+        
+    edges = []       
+    for e in network.reduce_edge_set():
+        edge_source = e.compute_direction()
+        if edge_source is not None:
+            src = node_idx[edge_source]
+            rcp = node_idx[e.p2 if edge_source != e.p2 else e.p1]
+            directed = True
+        else:
+            src = node_idx[e.p1]
+            rcp = node_idx[e.p2]
+            directed = False
+        edges.append ({'source': src, 'target': rcp, 'directed': directed, 'length': network.edges[e]})
+        
+    network_info['Nodes'] = nodes    
+    network_info['Edges'] = edges
+        
+    print (json.dumps (network_info, indent = 4, sort_keys = 4))
 else:
-	try:
-		settings.input = open (settings.input, 'r')
-	except IOError:
-		print ("Failed to open '%s' for reading" % (settings.input))
-		raise
-	
-if settings.dot == None:
-	settings.dot = sys.stdout
-else:
-	try:
-		settings.dot = open (settings.dot, 'w')
-	except IOError:
-		print ("Failed to open '%s' for writing" % (settings.dot))
-		raise
-		
-	
-edi = None
-
-if settings.edi is not None:
-	try:
-		settings.edi = open (settings.edi, 'r')
-		edi = import_edi (settings.edi)
-	except IOError:
-		print ("Failed to open '%s' for reading" % (settings.edi))
-		raise
-
-try:
-	settings.cluster = open (settings.cluster, 'w')
-except IOError:
-	print ("Failed to open '%s' for writing" % (settings.cluster))
-	raise
-	
-formatter = parseAEH
-
-if settings.format is not None:
-	formats = {"AEH" : parseAEH, "LANL": parseLANL, "plain": parsePlain}
-	try:
-		formatter = formats[settings.format]
-	except KeyError:
-		print ("%s is not a valid setting for 'format' (must be in %s)" % (settings.edi,str(list(formats.keys()))))
-		raise
-		
-if settings.exclude is not None:
-	try:
-		settings.exclude = datetime.datetime (int (settings.exclude), 12, 31)	
-	except ValueError:
-		print ("Invalid contaminant threshold year '%s'" % (settings.exclude))
-		raise 
-
-
-if settings.threshold is not None:
-	settings.threshold = float (settings.threshold)
-	
-network = transmission_network ()
-network.read_from_csv_file (settings.input, formatter, settings.threshold)
-	 
-network_stats = network.get_edge_node_count ()
-sys.setrecursionlimit(max(sys.getrecursionlimit(),network_stats['nodes']))	 
-	 
-network.compute_clusters()
-clusters = network.retrieve_clusters ()
-
-if settings.exclude is not None:
-	remove_these_ids = []
-	for c in clusters:
-		for node in clusters[c]:
-			if tm_to_datetime (node.dates[0]) <= settings.exclude:
-				if node.cluster_id not in remove_these_ids:
-					remove_these_ids.append(node.cluster_id)
-		
-	print ("Removing %d clusters with contaminant sequences" % len (remove_these_ids))
-	network.apply_cluster_filter (remove_these_ids)
-	network.compute_clusters()
-	clusters = network.retrieve_clusters ()
-	
-network_stats = network.get_edge_node_count ()
-print ("Read a graph on %d nodes with %d edges" % (network_stats['nodes'], network_stats['edges']), file = sys.stderr)
-print ("Found %d clusters" % len(clusters), file = sys.stderr)
-print ("Maximum cluster size = %d nodes" % max ([len (clusters[c]) for c in clusters]), file = sys.stderr)
-
-
-
-network.write_clusters (settings.cluster)
-
-print ("Fitting the degree distribution to various densities", file = sys.stderr)
-
-'''
-#this reports the evolution of node degrees
-
-by_id = {}
-
-sep = '\t'
-
-for node in network.nodes:
-	by_id [node.id] = []
-
-for year in range (2000,2012):
-	network.clear_filters ()
-	network.apply_distance_filter (0.015)
-	network.apply_date_filter (year,False)
-	network.compute_adjacency()
-	degree_list = network.get_node_degree_list(year)
-	for k in degree_list: 
-		if degree_list [k] is None:
-			by_id [k].append('.')
-		else:
-			by_id [k].append(str (degree_list [k]))
-
-print  ('ID%s%s' % (sep,sep.join([str (y) for y in  range (2000,2012)])))
-
-for node in by_id:
-	print ('%s%s%s'%(node,sep,sep.join (by_id[node])))
-'''
-
-distro_fit = network.fit_degree_distribution ()
-
-print ("Best distribution is '%s' with rho = %g" % (distro_fit['Best'], distro_fit['rho'][distro_fit['Best']]))
-
-for dname,rho in distro_fit['rho'].items():
-	print ("%s\n\trho = %s\n\tBIC = %s\n\tp   = %s" % (dname, 'N/A' if rho is None else "%5.2f" % (rho) , 'N/A' if distro_fit["BIC"][dname] is None else "%7.2f" % distro_fit["BIC"][dname], 'N/A' if distro_fit["p"][dname] is None else "%4.2f" % (distro_fit["p"][dname])))
-
-network.generate_dot (settings.dot)
+    describe_network (network)
+    
