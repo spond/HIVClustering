@@ -1,37 +1,51 @@
 #!/usr/bin/env python3.2
 
 import json
+import csv
 from hivclustering import *
 from networkbuild import *
 
+
+def get_sequence_ids(fn):
+    with open(fn, 'r') as filter_file:
+        reader = csv.reader(filter_file)
+        next(reader) #Skip header
+        return [row[0] for row in reader]
+
 if settings.json:
+
+    if settings.filter:
+        network.apply_id_filter(get_sequence_ids(settings.filter))
+
     network_info = describe_network (network, True)
     nodes = []
+
     cluster_info = network.retrieve_clusters ()
+
     node_idx = {}
     
     for idx,cluster in cluster_info.items():
         for n in cluster:
-           nodes.append ({'id': n.id, 'cluster' : idx, 'attributes': list (n.attributes), 'edi': n.get_edi(), 'baseline': n.get_baseline_date(True)}) 
+           if idx is not None:
+               nodes.append ({'id': n.id, 'cluster' : idx, 'attributes': list (n.attributes), 'edi': n.get_edi(), 'baseline': n.get_baseline_date(True)}) 
            node_idx [n] = len (nodes)-1
         
-    edges = []       
+    edges = []
     for e in network.reduce_edge_set():
-        edge_source = e.compute_direction()
-        if edge_source is not None:
-            src = node_idx[edge_source]
-            rcp = node_idx[e.p2 if edge_source != e.p2 else e.p1]
-            directed = True
-        else:
-            src = node_idx[e.p1]
-            rcp = node_idx[e.p2]
-            directed = False
-        edges.append ({'source': src, 'target': rcp, 'directed': directed, 'length': network.edges[e]})
+        if e.visible:
+            edge_source = e.compute_direction()
+            if edge_source is not None:
+                src = node_idx[edge_source]
+                rcp = node_idx[e.p2 if edge_source != e.p2 else e.p1]
+                directed = True
+            else:
+                src = node_idx[e.p1]
+                rcp = node_idx[e.p2]
+                directed = False
+            edges.append ({'source': src, 'target': rcp, 'directed': directed, 'length': network.edges[e]})
         
-    network_info['Nodes'] = nodes    
+    network_info['Nodes'] = nodes
     network_info['Edges'] = edges
-        
     print (json.dumps (network_info, indent = 4, sort_keys = 4))
 else:
     describe_network (network)
-    

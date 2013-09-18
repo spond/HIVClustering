@@ -264,6 +264,7 @@ arguments.add_argument('-r', '--resistance',   help = 'Load a JSON file with res
 arguments.add_argument('-p', '--parser', help = 'The reg.exp pattern to split up sequence ids; only used if format is regexp', required = False, type = str)
 arguments.add_argument('-a', '--attributes',   help = 'Load a CSV file with optional node attributes', type = argparse.FileType('r'))
 arguments.add_argument('-j', '--json', help = 'Output the network report as a JSON object', required = False,  action = 'store_true', default = False)
+arguments.add_argument('-k', '--filter', help = 'Only build network based on file nodes', required = False)
 
 settings = arguments.parse_args()
 
@@ -343,7 +344,7 @@ if settings.uds is not None:
 		print ("Failed to open '%s' for reading" % (settings.uds), file = sys.stderr)
 		raise
 
-network         = transmission_network ()
+network = transmission_network ()
 network.read_from_csv_file (settings.input, formatter, settings.threshold, 'BULK')
 
 
