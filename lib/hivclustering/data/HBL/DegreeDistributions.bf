@@ -127,7 +127,6 @@ degreeCounts = {};
 
 //allDegs = {"0": 43, "1": 6, "2": 6, "3": 1, "4": 3};
 
-
 for (k = 0; k < Abs(allDegs); k += 1)
 {
 	if (allDegs[k] > 0)
@@ -166,7 +165,7 @@ x2 = 0;
 
 
 
-//VERBOSITY_LEVEL = 10;
+VERBOSITY_LEVEL = 0;
 
 
 Optimize (res, likeFuncWaring(degreeCounts,x1,x2));
@@ -186,7 +185,7 @@ _degree_fit_results ["Waring"] = {"logL" : res[1][0], "BIC": -res[1][0]*2 + Log(
 
 
 x2 := 0;
-x1 :> 0;
+x1 :> 1;
 Optimize (res, likeFuncYule(degreeCounts,x1));
 fprintf (stdout, "\n\nYule:\nLog(L) = ", res[1][0], "\nBIC = ", -res[1][0]*2 + Log(totalNon0) * res[1][1], "\nrho = ", x1, "\n");
 
