@@ -5,7 +5,6 @@ from math import log10, floor
 from hivclustering import *
 
 #-------------------------------------------------------------------------------
-
 def print_network_evolution (network, store_fitted = None, outdegree = False, distance = None, do_print = True, outfile = sys.stdout):
     byYear = []
 
@@ -233,7 +232,6 @@ def import_edi (file):
 	return edi_by_id
 
 #-------------------------------------------------------------------------------
-
 def import_edi_json (file):
     edi_by_id  = json.load (file)
     for pid in edi_by_id:
@@ -247,8 +245,18 @@ def import_edi_json (file):
 
     return edi_by_id
 
-random.seed ()
+def get_sequence_ids(fn):
+    '''Expects newline separated file of node ids'''
+    with open(fn, 'r') as filter_file:
+        reader = csv.reader(filter_file)
+        filter_list = []
+        for row in reader:
+            filter_list.append(row[0])
+        if not len(filter_list):
+            raise Exception('Empty file list')
+        return list(set(filter_list))
 
+random.seed()
 arguments = argparse.ArgumentParser(description='Read filenames.')
 
 arguments.add_argument('-i', '--input',   help = 'Input CSV file with inferred genetic links (or stdin if omitted). Must be a CSV file with three columns: ID1,ID2,distance.')

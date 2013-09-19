@@ -5,17 +5,11 @@ import csv
 from hivclustering import *
 from networkbuild import *
 
-
-def get_sequence_ids(fn):
-    with open(fn, 'r') as filter_file:
-        reader = csv.reader(filter_file)
-        next(reader) #Skip header
-        return [row[0] for row in reader]
+if settings.filter:
+    filter_list = get_sequence_ids(settings.filter)
+    network.apply_id_filter(filter_list)
 
 if settings.json:
-
-    if settings.filter:
-        network.apply_id_filter(get_sequence_ids(settings.filter))
 
     network_info = describe_network (network, True)
     nodes = []
@@ -47,5 +41,6 @@ if settings.json:
     network_info['Nodes'] = nodes
     network_info['Edges'] = edges
     print (json.dumps (network_info, indent = 4, sort_keys = 4))
+
 else:
     describe_network (network)
