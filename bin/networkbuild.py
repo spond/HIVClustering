@@ -272,7 +272,7 @@ arguments.add_argument('-r', '--resistance',   help = 'Load a JSON file with res
 arguments.add_argument('-p', '--parser', help = 'The reg.exp pattern to split up sequence ids; only used if format is regexp', required = False, type = str)
 arguments.add_argument('-a', '--attributes',   help = 'Load a CSV file with optional node attributes', type = argparse.FileType('r'))
 arguments.add_argument('-j', '--json', help = 'Output the network report as a JSON object', required = False,  action = 'store_true', default = False)
-arguments.add_argument('-k', '--filter', help = 'Only build network based on file nodes', required = False)
+arguments.add_argument('-k', '--filter', help = 'Build network filtered by newline separated id list in supplied file. ', required = False)
 
 settings = arguments.parse_args()
 
