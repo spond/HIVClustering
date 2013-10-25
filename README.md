@@ -76,4 +76,4 @@ USAGE
                             Load a CSV file with optional node attributes
       -j, --json            Output the network report as a JSON object
       -k FILTER, --filter FILTER
-                            Only build network based on file list.
+                            Only return clusters with ids listed by a newline separated supplied file. 
