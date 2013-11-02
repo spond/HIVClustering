@@ -16,7 +16,7 @@ setup(name='hivclustering',
       url='http://github.com/spond/hivclustering',
       license='MIT License',
       packages=['hivclustering'],
-      package_dir={'hivclustering': 'lib/hivclustering'},
+      package_dir={'': 'lib'},
       package_data={'hivclustering': [
             'data/HBL/*.bf',
     ]},
