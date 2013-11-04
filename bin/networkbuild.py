@@ -5,7 +5,6 @@ from math import log10, floor
 from hivclustering import *
 
 #-------------------------------------------------------------------------------
-
 def print_network_evolution (network, store_fitted = None, outdegree = False, distance = None, do_print = True, outfile = sys.stdout):
     byYear = []
 
@@ -233,7 +232,6 @@ def import_edi (file):
 	return edi_by_id
 
 #-------------------------------------------------------------------------------
-
 def import_edi_json (file):
     edi_by_id  = json.load (file)
     for pid in edi_by_id:
@@ -247,8 +245,18 @@ def import_edi_json (file):
 
     return edi_by_id
 
-random.seed ()
+def get_sequence_ids(fn):
+    '''Expects newline separated file of node ids'''
+    with open(fn, 'r') as filter_file:
+        reader = csv.reader(filter_file)
+        filter_list = []
+        for row in reader:
+            filter_list.append(row[0])
+        if not len(filter_list):
+            raise Exception('Empty file list')
+        return list(set(filter_list))
 
+random.seed()
 arguments = argparse.ArgumentParser(description='Read filenames.')
 
 arguments.add_argument('-i', '--input',   help = 'Input CSV file with inferred genetic links (or stdin if omitted). Must be a CSV file with three columns: ID1,ID2,distance.')
@@ -264,6 +272,7 @@ arguments.add_argument('-r', '--resistance',   help = 'Load a JSON file with res
 arguments.add_argument('-p', '--parser', help = 'The reg.exp pattern to split up sequence ids; only used if format is regexp', required = False, type = str)
 arguments.add_argument('-a', '--attributes',   help = 'Load a CSV file with optional node attributes', type = argparse.FileType('r'))
 arguments.add_argument('-j', '--json', help = 'Output the network report as a JSON object', required = False,  action = 'store_true', default = False)
+arguments.add_argument('-k', '--filter', help = 'Only return clusters with ids listed by a newline separated supplied file. ', required = False)
 
 settings = arguments.parse_args()
 
@@ -343,7 +352,7 @@ if settings.uds is not None:
 		print ("Failed to open '%s' for reading" % (settings.uds), file = sys.stderr)
 		raise
 
-network         = transmission_network ()
+network = transmission_network ()
 network.read_from_csv_file (settings.input, formatter, settings.threshold, 'BULK')
 
 
