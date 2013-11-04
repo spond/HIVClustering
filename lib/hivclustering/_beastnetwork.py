@@ -1322,7 +1322,7 @@ class transmission_network:
         pass
 
     def type_of_adjacency_list (self):
-        if self.adjacency_list is not None:
+        if self.adjacency_list and self.adjacency_list is not None:
             if isinstance ([(k, i) for k, i in enumerate (self.adjacency_list) if k == 0][0][1], patient):
                 return 'patient'
             else:
