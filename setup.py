@@ -23,5 +23,5 @@ setup(name='hivclustering',
       data_files=[('/usr/local/bin', [
             'bin/hivnetworkcsv', 'bin/TNS'
       ])],
-      requires=['hypy']
+      requires=['hppy']
      )

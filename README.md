@@ -18,7 +18,7 @@ Clone the HyPhy repo <git://github.com/veg/hyphy.git>
     
 2). The higher level Python-HyPhy interface (hppy)
 
-Clone the hypy repo <git://github.com/nlhepler/hppy.git>
+Clone the hppy repo <git://github.com/nlhepler/hppy.git>
 
     cd [hppy]
     sudo python3 setup.py install
