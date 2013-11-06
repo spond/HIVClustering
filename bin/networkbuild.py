@@ -375,3 +375,9 @@ if edi is not None:
 
 if settings.attributes is not None:
     import_attributes ( settings.attributes, network)
+    
+if settings.sequences and settings.edge_filtering:                
+    network.test_edge_support (os.path.abspath (settings.sequences), network.find_all_triangles(network.reduce_edge_set()))
+    if settings.edge_filtering == 'remove':
+        network.prune_all_edges_lacking_support()
+

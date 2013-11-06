@@ -11,10 +11,6 @@ if settings.filter:
     filter_list = get_sequence_ids(settings.filter)
     network.apply_id_filter(filter_list)
 
-if settings.sequences and settings.edge_filtering:                
-    network.test_edge_support (os.path.abspath (settings.sequences), network.find_all_triangles(network.reduce_edge_set()))
-    if settings.edge_filtering == 'remove':
-        network.apply_removed_edge_filter (do_clear = False)
 
 
 if settings.json:
@@ -44,7 +40,7 @@ if settings.json:
                 src = node_idx[e.p1]
                 rcp = node_idx[e.p2]
                 directed = False
-            edges.append ({'source': src, 'target': rcp, 'directed': directed, 'length': network.edges[e], 'support' : e.edge_reject_p, 'removed': not e.has_support()})
+            edges.append ({'source': src, 'target': rcp, 'directed': directed, 'length': network.edges[e], 'support' : e.edge_reject_p, 'removed': not e.has_support(), 'sequences' : e.sequences})
         
     network_info['Nodes'] = nodes
     network_info['Edges'] = edges

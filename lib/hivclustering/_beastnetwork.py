@@ -1176,6 +1176,22 @@ class transmission_network:
             edge_set.add (representative_edge)
         return edge_set
 
+    def prune_all_edges_lacking_support (self):
+        byPairs = {}
+        for anEdge in self.edges:
+            patient_pair = (anEdge.p1, anEdge.p2)
+            if patient_pair in byPairs:
+                byPairs[patient_pair].append (anEdge)
+            else:
+                byPairs[patient_pair] = [anEdge]
+
+        for patient_pair in byPairs:
+            representative_edge = min (byPairs[patient_pair])
+            if representative_edge.has_support () == False:
+                for e in byPairs[patient_pair]:
+                    del self.edges[e]
+                
+    
 
     def generate_dot (self, file, year_vis = None, reduce_edges = True):
 
