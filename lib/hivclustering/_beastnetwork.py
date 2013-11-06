@@ -84,7 +84,7 @@ def describe_vector (vector):
 #-------------------------------------------------------------------------------
 
 class edge:
-    def __init__ (self, patient1, patient2, date1, date2, visible, attribute = None):
+    def __init__ (self, patient1, patient2, date1, date2, visible, attribute = None, sequence_ids = None):
         if patient1 < patient2:
             self.p1    = patient1
             self.p2    = patient2
@@ -102,6 +102,12 @@ class edge:
         self.attribute = set()
         if attribute is not None:
             self.attribute.add (attribute)
+        self.sequences = sequence_ids
+        self.edge_reject_p = 0.
+        self.is_unsupported = False
+        
+    def has_support (self):
+        return self.is_unsupported == False
 
     def compute_direction (self, return_diff = False, min_days = 30, assume_missing_is_chronic = 180):
     # returns the node FROM which the edge is pointing AWAY
@@ -207,6 +213,10 @@ class edge:
     def update_attributes (self, desc):
         if desc is not None:
             self.attribute.add(desc)
+            
+    def update_sequence_info (self, seq_info):
+        if seq_info is not None:
+            self.sequences = seq_info
 
     def has_attribute (self, attr):
         return attr in self.attribute
@@ -799,22 +809,23 @@ class transmission_network:
         pid1 = self.make_sequence_key (patient1['id'],patient1['date'])
         if pid1 not in self.sequence_ids:
             self.sequence_ids [pid1] = patient1["rawid"]
+            
         pid2 = self.make_sequence_key (patient2['id'],patient2['date'])
         if pid2 not in self.sequence_ids:
             self.sequence_ids [pid2] = patient2["rawid"]
 
         if node_only == False:
             if not same:
-                new_edge = edge (p1,p2,patient1['date'],patient2['date'],True, edge_attribute)
+                new_edge = edge (p1,p2,patient1['date'],patient2['date'],True, edge_attribute, (patient1["rawid"], patient2["rawid"]))
                 if new_edge not in self.edges:
                     if not bootstrap_mode or edge_attribute is None:
                         self.edges [new_edge] = distance
                 else:
-                    if edge_attribute is not None:
-                        for k in self.edges:
-                            if k == new_edge:
-                                k.update_attributes (edge_attribute)
-                                break
+                    for k in self.edges:
+                        if k == new_edge:
+                            k.update_attributes (edge_attribute)
+                            k.update_sequence_info ((patient1["rawid"], patient2["rawid"]))
+                            break
 
                     if distance < self.edges [new_edge]:
                         self.edges [new_edge] = distance
@@ -1022,6 +1033,15 @@ class transmission_network:
                 else:
                     edge.visible = edge.p1.id in list or edge.p2.id in list
                 vis_count += edge.visible
+        return vis_count
+
+    def apply_removed_edge_filter (self, do_clear = True):
+        if do_clear : self.clear_adjacency()
+        vis_count = 0
+        for edge in self.edges:
+            if edge.visible:
+                edge.visible = edge.has_support()
+            vis_count += edge.visible
         return vis_count
 
     def apply_attribute_filter (self, attribute_value, do_clear = True, strict = False):
@@ -1329,7 +1349,77 @@ class transmission_network:
                 return 'edge'
         return None
 
+    def find_all_triangles (self, edge_set):
+        triangles                   =  set ()
+        sequences_involved_in_links =  set ()
+        sequence_pairs              =  set ()
 
+        for an_edge in edge_set:
+            if an_edge.sequences is not None:
+                sequence_pairs.add (an_edge.sequences)
+                for seq in an_edge.sequences:
+                    sequences_involved_in_links.add (seq)
+            
+        for this_pair in sequence_pairs:
+            for third_apex in sequences_involved_in_links: 
+                if (((third_apex, this_pair[0]) in sequence_pairs or (this_pair[0],third_apex) in sequence_pairs)
+                    and ((third_apex, this_pair[1]) in sequence_pairs or (this_pair[1],third_apex) in sequence_pairs)):
+                    triangles.add ((this_pair[0], this_pair[1], third_apex))
+
+
+        return triangles
+
+    def test_edge_support (self, sequence_file_name, triangles, hy_instance = None, p_value_cutoff = 0.05):
+        if hy_instance is None:
+            hy_instance = hy.HyphyInterface ();
+        script_path = os.path.realpath(__file__)
+        hbl_path =  os.path.join(os.path.dirname(script_path), "data", "HBL", "TriangleSupport.bf")
+
+        hy_instance.queuevar ('_py_sequence_file', sequence_file_name)
+        triangle_spec = []
+        for k in triangles:
+            for i in k:
+                triangle_spec.append (i)
+        
+        hy_instance.queuevar ('_py_triangle_sequences', triangle_spec)    
+        hy_instance.runqueue (batchfile = hbl_path)
+        if len(hy_instance.stderr):
+            raise RuntimeError (hy_instance.stderr)
+    
+        seqs_to_edge = {}
+        for e in self.edges:
+            if e.sequences:
+                seqs_to_edge [e.sequences] = e
+                
+        edges_removed = set()
+        must_keep     = set()           
+
+        for k in range (len (triangles)):
+            p_values = hy_instance.getvar (str(k),hy.HyphyInterface.MATRIX)
+            seq_id = [triangle_spec[k] for k in range (k*3,k*3+3)]
+            edges = [None,None,None]
+            for pair_index,pair in enumerate(((0,1),(0,2),(1,2))):
+                for seq_tag in [(seq_id[pair[0]], seq_id[pair[1]]), (seq_id[pair[1]], seq_id[pair[0]])]:
+                    if seq_tag in seqs_to_edge:
+                        edges[pair_index] = seqs_to_edge[seq_tag]
+                        break
+            
+            for i in range (3):
+               edges[i].edge_reject_p = max (p_values[2-i], edges[i].edge_reject_p)
+               
+            max_p = max (p_values)
+            if max_p > p_value_cutoff:
+                remove_index = 2 - p_values.index(max_p)
+                if edges[remove_index] not in edges_removed and edges[remove_index] not in must_keep:
+                    edges[remove_index].is_unsupported = True
+                    edges_removed.add (edges[remove_index])
+                    for e in [k for k in range (3) if k!=remove_index]:
+                        must_keep.add (edges[e])
+                            
+            
+        
+                
+    
     def fit_degree_distribution (self, degree_option = None, hy_instance = None):
         if hy_instance is None:
             hy_instance = hy.HyphyInterface ();
