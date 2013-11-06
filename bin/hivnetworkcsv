@@ -40,7 +40,7 @@ if settings.json:
                 src = node_idx[e.p1]
                 rcp = node_idx[e.p2]
                 directed = False
-            edges.append ({'source': src, 'target': rcp, 'directed': directed, 'length': network.edges[e], 'support' : e.edge_reject_p, 'removed': not e.has_support()})
+            edges.append ({'source': src, 'target': rcp, 'directed': directed, 'length': network.edges[e], 'support' : e.edge_reject_p, 'removed': not e.has_support(), 'sequences' : e.sequences})
         
     network_info['Nodes'] = nodes
     network_info['Edges'] = edges
