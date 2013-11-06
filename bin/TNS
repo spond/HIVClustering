@@ -428,7 +428,8 @@ def tns (degree, cluster_size, fitted = None):
     if fitted is not None:
         return sum(fitted[0:degree])
     else:
-        return float(degree+1)**(1./3) + log10 (cluster_size)
+        raise RuntimeError ('Missing fitted in tns')
+        #return float(degree+1)**(1./3) + (log10 (cluster_size) if cluster_size is not None else 0.)
         
 #-------------------------------------------------------------------------------		
 def compute_tns (network, year_from, year_to, distance = 0.015, fitted = None, outdegree = False, do_print = True):
@@ -524,6 +525,7 @@ sys.exit(0)
 
 #print_tns (network, 0.8)
 
+'''
 precomputed_tns = {}
 
 with open ('data/TNS_new.txt', 'r') as tns_fh:
@@ -531,6 +533,7 @@ with open ('data/TNS_new.txt', 'r') as tns_fh:
     next(tns_reader)
     for k in tns_reader:
         precomputed_tns [k[0]] = float (k[3])
+'''
         
 if settings.threshold is None: 
     print ("%d nodes with multiple dates" % len (network_stats['multiple_dates']))

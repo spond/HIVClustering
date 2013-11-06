@@ -16,23 +16,19 @@ function logfactorial (k)
 //--------------------------------------------------
 
 
-function waringDensity (x, rho, phi)
-{
+function waringDensity (x, rho, phi) {
 	return Log(rho-1) + LnGamma (phi+rho) -LnGamma(phi+1) + LnGamma(x+phi) - LnGamma (x+phi+rho);
 }
 
-function yuleDensity (x, a)
-{
+function yuleDensity (x, a) {
 	return Log (a-1) + LnGamma (x) + LnGamma (a) - LnGamma (x+a);
 }
 
-function negBinomDensity (x, p, r)
-{
+function negBinomDensity (x, p, r) {
 	return LnGamma (r+x) - LnGamma(r) + r*Log(1-p) + x*Log(p) - logfactorial(x);
 }
 
-function paretoDensity (x, p)
-{
+function paretoDensity (x, p) {
 	hsn = harmonicNumbers[p];
 	if (hsn == 0)
 	{
@@ -43,8 +39,7 @@ function paretoDensity (x, p)
 	return x^(-p)/hsn;
 }
 
-function LogZipfMandelbrotDensity (x, q, s)
-{
+function LogZipfMandelbrotDensity (x, q, s) {
 	return -s*Log(x+q);
 }
 
@@ -189,7 +184,13 @@ x1 :> 1;
 Optimize (res, likeFuncYule(degreeCounts,x1));
 fprintf (stdout, "\n\nYule:\nLog(L) = ", res[1][0], "\nBIC = ", -res[1][0]*2 + Log(totalNon0) * res[1][1], "\nrho = ", x1, "\n");
 
-_degree_fit_results ["Yule"] = {"logL" : res[1][0], "BIC": -res[1][0]*2 + Log(totalNon0) * res[1][1], "rho": x1};
+x1MLE = x1;
+critLevel = 1.92073*2;
+FindRoot (zU, res[1][0] - likeFuncYule(degreeCounts,x1) - critLevel,x1, x1MLE, 10000);
+FindRoot (zL, res[1][0] - likeFuncYule(degreeCounts,x1) - critLevel,x1, 0, x1MLE);
+x1 = x1MLE;
+
+_degree_fit_results ["Yule"] = {"logL" : res[1][0], "BIC": -res[1][0]*2 + Log(totalNon0) * res[1][1], "rho": x1, "rho_ci": {{zL__,zU__}}};
 
 x1 :< 1;
 x1 :> 0;
@@ -207,6 +208,7 @@ x1 :< 1e26;
 Optimize (res, likeFuncPareto(degreeCounts,x1));
 fprintf (stdout, "\n\nPareto:\nLog(L) = ", res[1][0], "\nBIC = ", -res[1][0]*2 + Log(totalNon0) * res[1][1], "\np = ", x1,"\n");
 _degree_fit_results ["Pareto"] = {"logL" : res[1][0], "BIC": -res[1][0]*2 + Log(totalNon0) * res[1][1], "rho": x1};
+
 
 function _THyPhyAskFor(key)
 {
@@ -240,10 +242,19 @@ function _THyPhyAskFor(key)
         return res["Exp(waringDensity(_MATRIX_ELEMENT_ROW_+1,"+(_degree_fit_results ["Waring"])["x1"]+","+(_degree_fit_results ["Waring"])["x2"]+"))"];
    }
     
+    if (key == "Yule_PDF") {
+        res = {Abs(allDegs),1};
+        return res["Exp(yuleDensity(_MATRIX_ELEMENT_ROW_+1,"+(_degree_fit_results ["Yule"])["rho"] + "))"];
+    }
+
     if (key == "Waring_rho_ci") {
         return (_degree_fit_results ["Waring"])["rho_ci"];
     }
     
+    if (key == "Yule_rho_ci") {
+        return (_degree_fit_results ["Yule"])["rho_ci"];
+    }
+
     if (key == "Waring" || key == "Yule" || key == "Pareto")
     {
     	return (_degree_fit_results[key])["rho"];

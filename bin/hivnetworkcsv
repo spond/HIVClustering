@@ -11,10 +11,6 @@ if settings.filter:
     filter_list = get_sequence_ids(settings.filter)
     network.apply_id_filter(filter_list)
 
-if settings.sequences and settings.edge_filtering:                
-    network.test_edge_support (os.path.abspath (settings.sequences), network.find_all_triangles(network.reduce_edge_set()))
-    if settings.edge_filtering == 'remove':
-        network.apply_removed_edge_filter (do_clear = False)
 
 
 if settings.json:
