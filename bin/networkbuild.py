@@ -273,6 +273,8 @@ arguments.add_argument('-p', '--parser', help = 'The reg.exp pattern to split up
 arguments.add_argument('-a', '--attributes',   help = 'Load a CSV file with optional node attributes', type = argparse.FileType('r'))
 arguments.add_argument('-j', '--json', help = 'Output the network report as a JSON object', required = False,  action = 'store_true', default = False)
 arguments.add_argument('-k', '--filter', help = 'Only return clusters with ids listed by a newline separated supplied file. ', required = False)
+arguments.add_argument('-s', '--sequences', help = 'Provide the MSA with sequences which were used to make the distance file. ', required = False)
+arguments.add_argument('-n', '--edge_filtering', choices = ['remove','report'] , help = 'Compute edge support and mark edges for removal using sequence-based triangle tests (requires the -s argument) and either only report them or remove the edges before doing other analyses ', required = False)
 
 settings = arguments.parse_args()
 
