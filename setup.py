@@ -21,7 +21,7 @@ setup(name='hivclustering',
             'data/HBL/*.bf',
     ]},
       data_files=[('/usr/local/bin', [
-            'bin/hivnetworkcsv', 'bin/TNS'
+            'bin/hivnetworkcsv', 'bin/networkbuild.py', 'bin/TNS'
       ])],
       requires=['hppy']
      )
