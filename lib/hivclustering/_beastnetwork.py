@@ -998,10 +998,19 @@ class transmission_network:
         edge_count = 0
 
         nodes_by_stage = {}
+        edges_by_stage = {}
 
         for edge in self.edges:
             if edge.visible:
                 edge_count += 1
+                
+                edge_designation = "-".join (sorted ([str (edge.p1.stage), str (edge.p2.stage)]))
+                if edge_designation not in edges_by_stage:
+                    edges_by_stage[edge_designation] = 1
+                else:
+                    edges_by_stage[edge_designation] += 1
+                    
+                
                 for p in [edge.p1,edge.p2]:
                     if p not in vis_nodes:
                         if attributes_to_check is not None:
@@ -1020,7 +1029,7 @@ class transmission_network:
                 edge_set.add ((edge.p1, edge.p2))
 
 
-        return {'edges': len(edge_set), 'nodes': len(vis_nodes), 'total_edges': edge_count, 'multiple_dates':[[k[0],k[1].days] for k in multiple_samples], 'total_sequences': len(vis_nodes) + sum([k[0] for k in multiple_samples]) - len(multiple_samples), 'stages' : nodes_by_stage }
+        return {'edges': len(edge_set), 'nodes': len(vis_nodes), 'total_edges': edge_count, 'multiple_dates':[[k[0],k[1].days] for k in multiple_samples], 'total_sequences': len(vis_nodes) + sum([k[0] for k in multiple_samples]) - len(multiple_samples), 'stages' : nodes_by_stage, 'edge-stages': edges_by_stage }
 
     def clear_adjacency (self, clear_filter = True):
         if self.adjacency_list is not None:
