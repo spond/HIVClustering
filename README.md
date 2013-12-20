@@ -29,7 +29,7 @@ USAGE
     usage: hivnetworkcsv [-h] [-i INPUT] [-u UDS] [-d DOT] [-c CLUSTER]
                          [-t THRESHOLD] [-e EDI] [-z OLD_EDI] [-f FORMAT]
                          [-x EXCLUDE] [-r RESISTANCE] [-p PARSER] [-a ATTRIBUTES]
-                         [-j] [-k FILTER]
+                         [-j] [-k FILTER] [-s SEQUENCES] [-n {remove,report}]
 
     Read filenames.
 
@@ -76,4 +76,14 @@ USAGE
                             Load a CSV file with optional node attributes
       -j, --json            Output the network report as a JSON object
       -k FILTER, --filter FILTER
-                            Only return clusters with ids listed by a newline separated supplied file. 
+                            Only return clusters with ids listed by a newline
+                            separated supplied file.
+      -s SEQUENCES, --sequences SEQUENCES
+                            Provide the MSA with sequences which were used to make
+                            the distance file.
+      -n {remove,report}, --edge_filtering {remove,report}
+                            Compute edge support and mark edges for removal using
+                            sequence-based triangle tests (requires the -s
+                            argument) and either only report them or remove the
+                            edges before doing other analyses
+
