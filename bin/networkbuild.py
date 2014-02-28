@@ -7,9 +7,13 @@ from functools import partial
 import multiprocessing
 
 run_settings = None
+uds_settings = None
 
 def settings ():
     return run_settings
+
+def uds_attributes ():
+    return uds_settings
 
 #-------------------------------------------------------------------------------
 def print_network_evolution (network, store_fitted = None, outdegree = False, distance = None, do_print = True, outfile = sys.stdout):
@@ -96,9 +100,11 @@ def describe_network (network, json_output = False):
            'A-3.0'  : 'A-3',
            'A-3.1'  : 'A-3',
            'E-0.0'  : 'E-1' }
-
+           
+ 
     if json_output:
-        return_json ['HIV Stages'] = {}
+        return_json ['HIV Stages']  = {}
+        return_json ['Edge Stages'] = {}
 
     for key in set(map.values()):
         total = 0
@@ -138,7 +144,8 @@ def describe_network (network, json_output = False):
                                    'rho CI': distro_fit['rho_ci'][distro_fit['Best']],
                                    'fitted': distro_fit['fitted'][distro_fit['Best']] }
     else:
-        print ("Best distribution is '%s' with rho = %g" % (distro_fit['Best'], distro_fit['rho'][distro_fit['Best']]))
+        ci = distro_fit['rho_ci'][distro_fit['Best']]
+        print ("Best distribution is '%s' with rho = %g %s" % (distro_fit['Best'], distro_fit['rho'][distro_fit['Best']], "[%g - %g]" % (ci[0], ci[1]) if ci is not None else ''))
 
     # find diffs in directed edges
     '''for anEdge in network.edges:
@@ -372,10 +379,10 @@ def build_a_network ():
     network.read_from_csv_file (run_settings.input, formatter, run_settings.threshold, 'BULK')
 
 
-    uds_attributes = None
+    uds_settings = None
 
     if run_settings.uds:
-        uds_attributes = network.read_from_csv_file (run_settings.uds, formatter, run_settings.threshold, 'UDS')
+        uds_settings = network.read_from_csv_file (run_settings.uds, formatter, run_settings.threshold, 'UDS')
 
     network_stats = network.get_edge_node_count ()
     sys.setrecursionlimit(max(sys.getrecursionlimit(),network_stats['nodes']))
