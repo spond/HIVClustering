@@ -1,0 +1,37 @@
+#!/usr/bin/env python3.2
+
+import json
+import csv
+import os.path
+import hashlib
+from Bio import SeqIO
+
+
+from hivclustering import *
+from networkbuild import *
+
+if __name__=='__main__':
+     
+    
+    network = build_a_network ()
+    with open (settings().sequences, 'r') as fh:
+        sequences = {}
+        for record in SeqIO.parse (fh, "fasta"):
+            sequences[record.id] = str (record.seq)
+            
+    
+    already_done = set ()
+    
+    for seq_id, seq_tag in network.sequence_ids.items():
+        seq_parts = seq_id.split ('|')
+        year = seq_parts[1].split ('-')[2]
+        if seq_parts[0] in already_done:
+            continue
+        
+        m = hashlib.md5()
+        already_done.add (seq_parts[0])
+        m.update (seq_parts[0].encode ('utf-8'))
+        print (">%s_US_%s\n%s" %(m.hexdigest()[0:10],year,sequences[seq_tag]))
+        
+        
+

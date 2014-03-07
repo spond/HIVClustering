@@ -1,0 +1,104 @@
+#!/usr/bin/env python3.2
+
+import json
+import csv
+import os.path
+import hashlib
+import subprocess
+
+def positive_integer (value):
+    ivalue = int(value)
+    if ivalue <= 0:
+         raise argparse.ArgumentTypeError("%s is an invalid positive int value" % value)
+    return ivalue
+
+def nn_float (value):
+    fvalue = float(value)
+    if fvalue < 0. or fvalue > 1.:
+         raise argparse.ArgumentTypeError("%s is an invalid rate " % value)
+    return fvalue
+
+
+from Bio import SeqIO
+
+from hivclustering import *
+from networkbuild import *
+
+def run_tn93 (in_path, out_path):
+
+    try:
+        subprocess.check_call (['/usr/local/bin/tn93', '-t', str(0.015), '-o', out_path, in_path]) 
+    except subprocess.CalledProcessError as e:
+        print ('ERROR: tn93 call failed',e,file = sys.stderr)
+    
+    return None
+
+if __name__=='__main__':
+    random.seed()
+    arguments = argparse.ArgumentParser(description='Read filenames.')
+    arguments.add_argument('-s', '--sequences', help = 'Provide the MSA with sequences which were used to make the distance file. ', required = True)
+    arguments.add_argument('-f', '--fasta', help = 'Write simulated network to. ', required = True, type = argparse.FileType('w'))
+    arguments.add_argument('-t', '--tn93', help = 'Write the CSV file to. ', required = True, type = str)
+    arguments.add_argument('-n', '--size', help = 'Number of sequences to simulate ', required = False, type = positive_integer, default = 500)
+    arguments.add_argument('-d', '--days', help = 'Mean number of days before transmissions', required = False, type = positive_integer, default = 7)
+    arguments.add_argument('-r', '--rate', help = 'Expected subs/site/year', required = False, type = nn_float, default = 0.0007)
+    arguments.add_argument('-l', '--lineages', help = 'Starting lineages', required = False, type = positive_integer, default = 10)
+    arguments.add_argument('-p', '--split', help = 'Initiate lineages at this rate', required = False, type = nn_float, default = 0.02)
+    arguments.add_argument('-m', '--random', help = 'Make random attachments at this rate', required = False, type = nn_float, default = 0.2)
+    arguments.add_argument('-u', '--subset', help = 'Subsample this many sequences', required = False, type = positive_integer)
+    arguments.add_argument('-b', '--bias', help = 'Bias subsamples to link to already sampled nodes', required = False, type = nn_float, default = 0.0)
+
+    settings = arguments.parse_args()
+    
+    ambig_remover = str.maketrans ("RYSWKMBDHVN-",
+                                   "ACCAGACAAAAA")
+    
+    with open (settings.sequences, "r") as fh:
+        sequences =  [str(record.seq).translate (ambig_remover)[0:1319] for record in SeqIO.parse (fh, "fasta")]
+        
+        
+
+    print (len(sequences))
+        
+    random_network = transmission_network ()
+
+    start_nodes = random_network.create_a_pref_attachment_network (network_size = settings.size, start_with = settings.lineages, random_attachment = settings.random, start_new_tree = settings.split, start_date = datetime.datetime (1996,1,1), tick_rate = settings.days)
+    #def sample_from_network (self, how_many_nodes = 100, how_many_edges = None, node_sampling_bias = 0.0):
+
+    if settings.subset is not None: 
+        subset_network = random_network.sample_from_network (settings.subset,node_sampling_bias = settings.bias)
+        describe_network (subset_network)
+        given_degrees = subset_network.get_node_degree_list ()
+    else:
+        describe_network (random_network)
+        given_degrees = random_network.get_node_degree_list ()
+        
+    
+    #describe_network (random_network)
+    print ("Sampling sequences...", file = sys.stderr)
+    seqs = random.sample (sequences, len (start_nodes))
+    
+    random_network.simulate_sequence_evolution (start_nodes, seqs, settings.rate)
+    random_network.dump_as_fasta (settings.fasta, filter_on_set = subset_network.nodes if settings.subset is not None else None)
+    
+    #def sample_from_network (self, how_many_nodes = 100, how_many_edges = None, node_sampling_bias = 0.0):
+     
+    
+    #print ("\n\n", given_degrees)
+    run_tn93 (settings.fasta.name, settings.tn93)
+    
+    recovered_network = transmission_network ()
+    with open (settings.tn93) as fh:
+        recovered_network.read_from_csv_file (fh, parsePlain, 0.015, 'BULK')
+        
+    describe_network (recovered_network)
+    recovered_degrees = recovered_network.get_node_degree_list ()
+    #print ("\n\n", recovered_degrees)
+    
+    
+    
+        
+    
+    
+   
+
