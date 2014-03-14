@@ -47,18 +47,19 @@ if __name__=='__main__':
     arguments.add_argument('-m', '--random', help = 'Make random attachments at this rate', required = False, type = nn_float, default = 0.2)
     arguments.add_argument('-u', '--subset', help = 'Subsample this many sequences', required = False, type = positive_integer)
     arguments.add_argument('-b', '--bias', help = 'Bias subsamples to link to already sampled nodes', required = False, type = nn_float, default = 0.0)
+    arguments.add_argument('-y', '--sampling', help = 'Mean number of days before samplin', required = False, type = positive_integer, default = 30)
 
     settings = arguments.parse_args()
     
     ambig_remover = str.maketrans ("RYSWKMBDHVN-",
-                                   "ACCAGACAAAAA")
+                                   "ACCAGACAAAA-")
     
     with open (settings.sequences, "r") as fh:
-        sequences =  [str(record.seq).translate (ambig_remover)[0:1319] for record in SeqIO.parse (fh, "fasta")]
+        sequences =  [str(record.seq).translate (ambig_remover)[0:1212] for record in SeqIO.parse (fh, "fasta")]
         
         
 
-    print (len(sequences))
+    print ("Read %d sequences " % len(sequences))
         
     random_network = transmission_network ()
 
@@ -78,7 +79,7 @@ if __name__=='__main__':
     print ("Sampling sequences...", file = sys.stderr)
     seqs = random.sample (sequences, len (start_nodes))
     
-    random_network.simulate_sequence_evolution (start_nodes, seqs, settings.rate)
+    random_network.simulate_sequence_evolution (start_nodes, seqs, settings.rate, settings.sampling)
     random_network.dump_as_fasta (settings.fasta, filter_on_set = subset_network.nodes if settings.subset is not None else None)
     
     #def sample_from_network (self, how_many_nodes = 100, how_many_edges = None, node_sampling_bias = 0.0):

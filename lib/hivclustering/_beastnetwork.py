@@ -110,20 +110,21 @@ def _test_edge_support (triangles, sequence_file_name, hy_instance, p_value_cuto
     
     return return_object
     
-def _simulate_HIV_sequence (sequence, time_span_days, rate_per_year, hy_instance):
+def _simulate_HIV_sequences (sequence, tree_matrix, hy_instance):
     script_path = os.path.realpath(__file__)
     hbl_path =  os.path.join(os.path.dirname(script_path), "data", "HBL", "SimulateSequence.bf")
-
-    div = time_span_days/365.*rate_per_year
-
+    
+    print ("Simulating a chain with %d sequences" % len (tree_matrix), file = sys.stderr)
+ 
     hy_instance.queuevar ('_baseline_sequence', sequence)
-    hy_instance.queuevar ('_desired_divergence', div)
+    hy_instance.queuevar ('tree_matrix', tree_matrix)
     hy_instance.runqueue (batchfile = hbl_path)
     if len(hy_instance.stderr):
         raise RuntimeError (hy_instance.stderr)
-    #print (hy_instance.stdout)
-    #print (div, hy_instance.getvar ('_desired_divergence',hy.HyphyInterface.STRING))
-    res = hy_instance.getvar ('_derived_sequence',hy.HyphyInterface.STRING)
+
+    res = {}
+    for k in [str(t[0]) for t in tree_matrix]:
+        res [int(k)] = hy_instance.getvar (k,hy.HyphyInterface.STRING)
     
     '''
     diff = 0 
@@ -585,6 +586,9 @@ class transmission_network:
 
             node_neighbs   = {}
             sampling_probs = {}
+            
+            if self.adjacency_list is None:
+                self.compute_adjacency ()
 
             for a_node in self.nodes:
                 node_neighbs [a_node]   = self.get_node_neighborhood (a_node.id,True,False)
@@ -707,35 +711,51 @@ class transmission_network:
             print (">%s%s\n%s" % (n.id, '' if add_degrees == False else "|" + str(degs[n]) , n.sequence), file = fh)
 
 
-    def simulate_cluster (self, root_node, rate_per_year, already_simulated, hy_instance,latest_sampled_sequences):
+    def construct_cluster_representation (self, root_node, already_simulated, the_cluster):
         if root_node in self.adjacency_list:
             for n in self.adjacency_list [root_node]:
                 if n not in already_simulated:
-                    #print ("$$$$$",  abs(tm_to_datetime (n.dates[0]) - tm_to_datetime (root_node.dates[0])).days)
                     already_simulated.add (n)
-                    #print ("%s -> %s (%d)" % (str(root_node.id), str (n.id), len (already_simulated)))
-                    n.sequence = _simulate_HIV_sequence (latest_sampled_sequences[root_node][0], abs(tm_to_datetime (n.dates[0]) - tm_to_datetime (latest_sampled_sequences[root_node][1])).days, rate_per_year, hy_instance)
-                    #n.sequence = _simulate_HIV_sequence (root_node.sequence, abs(tm_to_datetime (n.dates[0]) - tm_to_datetime (root_node.dates[0])).days, rate_per_year, hy_instance)
-                    latest_sampled_sequences [root_node] = (n.sequence, n.dates[0])
-                    latest_sampled_sequences [n] = latest_sampled_sequences [root_node]
-                    self.simulate_cluster (n, rate_per_year, already_simulated, hy_instance,latest_sampled_sequences)
+                    #n.sequence = _simulate_HIV_sequences (latest_sampled_sequences[root_node][0], abs(tm_to_datetime (n.dates[0]) - tm_to_datetime (latest_sampled_sequences[root_node][1])).days, rate_per_year, hy_instance)
+                    #self.simulate_cluster (n, rate_per_year, already_simulated, hy_instance,latest_sampled_sequences)
+                    the_cluster.append ([root_node, n])
+                    self.construct_cluster_representation (n, already_simulated, the_cluster)
+                    
                 
-    def simulate_sequence_evolution (self, founders, founder_sequences, rate_per_year):
+    def simulate_sequence_evolution (self, founders, founder_sequences, rate_per_year, sampling_delay = None):
         if self.adjacency_list is None:
             self.compute_adjacency ()
 
         hy_instance = hy.HyphyInterface ()
         already_simulated = set ()
         
-        latest_sampled_sequences = {}
-        
         for node in self.nodes:
             try:
                 in_founders = founders.index (node)
                 already_simulated.add (node)
                 node.sequence = founder_sequences[in_founders]
-                latest_sampled_sequences[node] = (node.sequence, node.dates[0])
-                self.simulate_cluster (node, rate_per_year, already_simulated, hy_instance,latest_sampled_sequences)
+                the_cluster = []
+                self.construct_cluster_representation (node, already_simulated,the_cluster)
+                
+                sim_matrix = [[1,-1,0, random.expovariate (1./sampling_delay) / 365 * rate_per_year if sampling_delay is not None else 0.0]]
+                
+                node_id_to_index = {node.id : 1};
+                index_to_node_id = {1: node};
+                
+                for i,pair in enumerate(the_cluster):
+                    for n in pair:
+                        if n.id not in node_id_to_index:
+                            node_id_to_index[n.id] = len (node_id_to_index) + 1
+                            index_to_node_id [len (node_id_to_index)] = n
+                    
+                    sim_matrix.append ([node_id_to_index [pair[1].id], node_id_to_index [pair[0].id], abs(tm_to_datetime (pair[1].dates[0]) - tm_to_datetime (pair[0].dates[0])).days*rate_per_year/365, random.expovariate (1./sampling_delay) / 365 * rate_per_year if sampling_delay is not None else 0.0])
+                
+                seqs = _simulate_HIV_sequences (node.sequence, sim_matrix, hy_instance)
+                
+                for id, seq in seqs.items():
+                    index_to_node_id[id].sequence = seq    
+                    
+                #print (sim_matrix)
             except ValueError:
                 pass
     

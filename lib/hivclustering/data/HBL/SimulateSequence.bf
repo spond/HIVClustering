@@ -1,6 +1,7 @@
 site_rates = {{0,0,0,0,0,2,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,2,0,2,0,0,1,2,1,1,2,0,0,0,2,1,2,0,0,0,1,1,0,0,1,0,0,2,2,1,1,0,1,1,0,0,1,0,0,1,1,0,1,1,0,1,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,1,0,1,0,0,1,0,0,2,1,0,2,2,2,1,1,0,2,1,1,0,0,0,2,0,2,1,0,0,0,0,1,1,0,0,0,0,1,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,1,1,0,0,1,0,0,0,0,0,2,1,0,1,2,0,1,2,2,2,2,0,1,0,0,1,0,0,2,0,0,1,0,0,2,1,0,1,0,1,1,1,1,1,1,1,1,0,0,1,0,0,0,0,0,2,1,0,1,2,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1,0,0,1,1,0,1,1,0,1,0,0,1,1,0,1,2,0,0,0,0,2,0,0,1,0,0,1,1,0,0,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,1,1,1,0,1,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,1,0,0,1,0,2,1,0,0,1,0,0,1,0,0,1,0,0,0,0,0,0,1,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,1,0,1,2,1,1,0,0,1,0,0,1,0,0,1,1,0,0,0,0,1,1,0,0,0,0,1,0,0,1,0,0,1,0,0,2,0,0,1,0,0,1,1,0,1,0,1,1,1,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,1,0,1,0,0,0,0,0,2,0,0,0,0,1,1,0,0,1,0,0,2,0,0,1,1,0,1,0,1,1,0,0,1,0,0,0,0,0,1,0,0,1,1,0,1,0,0,0,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,2,1,0,0,1,0,0,1,0,0,2,0,0,1,0,0,0,0,0,1,1,0,2,0,0,1,1,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,0,2,1,0,1,0,0,1,1,0,1,1,1,1,1,1,0,0,1,2,0,1,1,0,0,0,0,0,1,0,0,0,0,0,1,1,0,2,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,0,2,0,0,1,1,0,1,0,0,2,1,0,1,1,0,1,2,1,1,1,1,2,0,0,1,0,0,2,0,0,1,0,0,1,0,0,1,0,0,1,0,0,2,0,0,1,0,0,1,0,0,1,0,0,1,2,2,1,0,0,1,0,0,0,0,1,1,0,0,1,0,0,1,0,0,2,1,1,1,0,0,2,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,2,0,0,1,0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,0,1,0,0,1,1,0,1,1,0,1,0,0,1,0,0,1,2,1,1,0,0,1,0,0,0,0,1,1,0,1,1,0,0,1,1,0,1,0,0,2,0,0,1,0,0,1,0,0,1,1,1,1,1,1,2,0,0,1,0,0,1,1,0,2,1,0,2,1,1,2,0,0,1,0,1,1,0,0,1,0,0,1,1,0,0,0,0,0,0,0,1,1,0,1,0,0,0,0,0,0,0,0,1,0,0,1,0,0,1,1,0,1,0,0,1,1,0,0,0,2,2,1,0,1,0,0,1,0,0,1,2,1,1,0,0,1,1,0,0,0,0,1,0,0,1,1,0,2,0,0,1,2,1,2,0,0,1,1,0,1,1,1,1,1,2,2,0,0,0,0,0,2,1,0,2,1,1,1,0,0,1,0,0,0,0,0,1,1,0,1,0,0,2,0,0,1,0,0,1,0,0,1,0,0,1,0,0,2,0,0,1,0,0,2,0,1,1,0,0,0,0,0,0,0,0,2,0,0,0,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,0,1,0,0,1,1,0,1,2,2,2,1,0,1,0,0,0,1,0,2,1,0,2,0,0,2,1,1,1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,1,1,0,0,0,0,1,0,0,1,0,0,1,1,0,2,0,0,1,0,0,0,0,0,1,0,0,1,0,0,1,0,0,2,0,0,2,2,1,0,0,0,2,0,0,1,0,1,1,1,0,1,0,2,2,1,0,2,1,0,1,0,0,1,0,1,1,0,0,1,1,0,1,0,1,1,0,0,1,2,0,1,0,0,1,1,0,1,2,0,1,0,0,0,0,0,2,1,0,1,2,0,1,1,0,1,1,0,1,0,0,1,2,2,1,0,0,1,0,0,0,0,0,2,1,0,1,0,0,1,1,0,2,0,1,0,0,0,1,0,0,1,0,0,1,0,0,2,0,0,0,1,0,1,0,1,1,1,1,2,0,0,1,0,0,1,0,0,0,0,0,2,0,1,2,0,0,2,0,0,0,0,0,1,1,0,1,2,0,1,0,0,1,1,1,2,1,0,1,1,0,0,0,1,0,0,0,1,2,0,0,0,0,0,0,0,1,0,0,1,0,1,1,2,2,2,1,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
 rate_values = {{0.044159,1.456920,5.453997}};
 
+
 TRY_NUMERIC_SEQUENCE_MATCH = 1;
 
 function defineModel () {
@@ -41,6 +42,41 @@ function defineModel () {
 }
 
 AUTOMATICALLY_CONVERT_BRANCH_LENGTHS = 1;
+ACCEPT_ROOTED_TREES = 1;
+
+/*tree_matrix = 
+{{1,-1,0.01,0.01},
+{2,1,0.05,0.0},
+{3,1,0.02,0.0},
+{4,3,0.03,0.0},
+{5,-1,0.01,0.0},
+{6,1,0.02,0.0}};*/
+
+Topology TP = ((fake_root:0.0,root:0.0));
+
+node_to_internal_id = {}; 
+
+seq_count   = Rows (tree_matrix);
+valid_names = {};
+
+for (node = 0; node < seq_count; node +=1) {
+    parent_id = tree_matrix [node][1];
+    if (parent_id < 0) {
+        parent_id = "root";
+    } else {
+        parent_id = node_to_internal_id[parent_id];
+    }   
+    nname = ""+ tree_matrix[node][0];
+    iid = "hidden_" + nname;
+    
+    TP + {"WHERE": parent_id, "NAME" : iid, "LENGTH": tree_matrix[node][2]};
+     
+    TP + {"WHERE": iid, "NAME": nname, "LENGTH": tree_matrix[node][3]};
+    node_to_internal_id [nname] = iid;
+    valid_names [nname] = 1;
+}
+
+str = Format (TP,1,1);
 
 //_baseline_sequence  = "CCTCAAATCACTCTTTGGCAACGACCCATCGTCACAATAAAGATAGGAGGGCAACTAAGGGAAGCTCTATTAGACACAGGAGCAGATGATACAGTATTAGAAGACATAAGTTTGCCAGGAAGATGGAAACCAAAGATGATAGGGGGAATTGGAGGTTTTGTCAAAGTAAAACAGTATGATCAGATACCCATAGAAATCTGTGGACATAAAGTTATAGGTACAGTATTAGTAGGACCTACACCTGTCAACGTAATTGGAAGAAATCTGATGACTCAGCTTGGTTGCACTTTAAATTTTCCCATTAGTCCTATTGAAACTGTACCAGTAAAATTAAAGCCAGGAATGGATGGCCCAAGAGTCAAACAATGGCCATTGACAGAAGAAAAAATAAAAGCATTAGTAGAAATTTGTGCAGAACTGGAAAAGGAAGGAAAAATTTCAAAAATTGGGCCTGAAAATCCATACAATACTCCAATATTTGCTATAAAGAAAAAGAACAGCACGAAATGGAGAAAATTAGTAGATTTCAGAGAACTTAATAAGAGAACTCAAGACTTCTGGGAAGTTCAATTAGGAATACCACATCCCGCAGGGTTACCAAAGAACAAGTCAGTAACAGTACTGGATGTGGGTGATGCATATTTTTCAGTTCCCTTAGATAAAGACTTCAGGAAGTACACTGCATTTACCATACCTAGTATAAACAATGAGACACCAGGGATTAGATATCAGTACAATGTGCTTCCACAGGGATGGAAAGGATCACCAGCAATATTCCAAAGTAGCATGACAAAAATCTTAGAGCCTTTCAGAAAACAAAACCCAGATATAGTTATCTACCAATACATGGATGATTTGTATGTAGGATCTGACTTAGAAATAGGGCAGCATAGAACAAAAGTAGAGGAACTGAGACAACATCTGTTGAAGTGGGGATTTTACACACCAGACAAAAAACATCAGAAAGAACCTCCATTCCTTTGGATGGGTTATGAACTCCATCCAGATAAATGGACAGTACAGCCTATAGTGCTGCCAGAAAAAGACAGCTGGACTGTCAATGACATACAGAAGTTAGTGGGAAAATTGAATTGGGCAAGTCAGATTTACCCAGGGATTAAAGTAAAGCAATTATGTAAACTCCTTAGAGGAACCAAATCACTAACAGAAGTAATACCACTAACAGAAGAGGCAGAGCTAGAGCTGGCAGAAAACAGGGAGATTCTAAAACAACCAGTACATGGAGTGTATTATGACCCATCAAAAGACTTAATAGCAGAATTACAGAAGCAGGAGCAAGGC";
 //_desired_divergence = 0.01;
@@ -48,16 +84,17 @@ AUTOMATICALLY_CONVERT_BRANCH_LENGTHS = 1;
 
 defineModel ();
 
-ExecuteCommands ("Tree T = (1:" + _desired_divergence + ",2:" + _desired_divergence+")");
-base_rate = T.2.mu;
+Tree T = str;
+
+//fprintf (stdout, str, "\n", Format (T,1,1), "\n");
 
 nuc_chars = {{"A","C","G","T"}{"1","","",""}};
-
 rate_count = Columns (rate_values);
 
-base_strings     = {1, rate_count};
-sim_strings      = {1, rate_count};
-counters         = {1, rate_count};
+sim_strings      = {};
+
+branch_names = BranchName (T,-1);
+
 
 for (ri = 0; ri < rate_count; ri += 1) {
     
@@ -68,24 +105,51 @@ for (ri = 0; ri < rate_count; ri += 1) {
         }
     }
     base_string * 0;
-    T.2.mu = base_rate*rate_values[ri];
-    //fprintf (stdout, Format (T, 1,1), "\n");
+    
+    if (ri) {
+        rescale_tree ("T", "mu", branch_names, rate_values[ri]/rate_values[ri-1]);    
+    } else {
+        rescale_tree ("T", "mu", branch_names, rate_values[0]);
+    }
+    
     DataSet       sim_seq    = Simulate (T,vectorOfFrequencies,nuc_chars, base_string);
     DataSetFilter sim_filter = CreateFilter (sim_seq, 1);
-    GetDataInfo (info, sim_filter, 1);
-    sim_strings [ri] = info;
+    
+    for (si = 0; si < sim_filter.species; si += 1) {
+        GetString (seq_name, sim_filter, si);
+        if (valid_names[seq_name]) {
+            GetDataInfo (info, sim_filter, si);
+            if (ri == 0) {
+                sim_strings [seq_name] = {rate_count,1};
+            } 
+            (sim_strings [seq_name])[ri] = info;
+        }  
+    }
+    
 }
 
-_returnstring = ""; _returnstring * 128; 
 
-for (ci = 0; ci < Abs (_baseline_sequence); ci+=1) {
-    ri = site_rates[ci];
-    _returnstring * ((sim_strings[ri])[counters[ri]]);
-    counters[ri] += 1;
+
+
+_returnstring = {}; 
+
+valid_ids = Rows (valid_names);
+
+for (si = 0; si < seq_count; si += 1) {
+    seq_tag = valid_ids[si];
+    _returnstring [seq_tag] = ""; _returnstring [seq_tag] * 128;
+    
+    counters         = {1, rate_count};
+
+    for (ci = 0; ci < Abs (_baseline_sequence); ci+=1) {
+        ri = site_rates[ci];
+        _returnstring[seq_tag] * ( ((sim_strings[seq_tag])[ri])[counters[ri]]);
+        counters[ri] += 1;
+    }
+    _returnstring [seq_tag] * 0;
 }
 
-
-_returnstring * 0; 
+fprintf (stdout, _returnstring["1"], "\n");
 
 /*fprintf (stdout, _returnstring, "\n");
 fprintf (stdout, ">1\n" + _baseline_sequence + "\n>2\n" + _returnstring, "\n");
@@ -94,11 +158,17 @@ LikelihoodFunction lf_sim = (sim_filter, T);
 Optimize (res, lf_sim);
 fprintf (stdout, lf_sim,"\n", base_rate, "\n", T.2.mu, "\n");*/
 
+function rescale_tree (tree, param, names, factor) {
+    for (b = 0; b < Columns (names); b+=1) {
+        ExecuteCommands (tree + "." + names[b] + "." + param + " = factor * " + tree + "." + names[b] + "." + param);
+    }
+    return 0;
+}
 
 function _THyPhyAskFor(key)
 {
-    if (key == "_derived_sequence") {
-        return _returnstring;
+    if (Abs (_returnstring[key]) > 0) {
+        return _returnstring[key];
     }
     
 
