@@ -12,9 +12,15 @@ def positive_integer (value):
          raise argparse.ArgumentTypeError("%s is an invalid positive int value" % value)
     return ivalue
 
-def nn_float (value):
+def float01 (value):
     fvalue = float(value)
     if fvalue < 0. or fvalue > 1.:
+         raise argparse.ArgumentTypeError("%s is an invalid rate " % value)
+    return fvalue
+
+def nn_float (value):
+    fvalue = float(value)
+    if fvalue < 0.:
          raise argparse.ArgumentTypeError("%s is an invalid rate " % value)
     return fvalue
 
@@ -40,19 +46,20 @@ if __name__=='__main__':
     arguments.add_argument('-f', '--fasta', help = 'Write simulated network to. ', required = True, type = argparse.FileType('w'))
     arguments.add_argument('-t', '--tn93', help = 'Write the CSV file to. ', required = True, type = str)
     arguments.add_argument('-n', '--size', help = 'Number of sequences to simulate ', required = False, type = positive_integer, default = 500)
-    arguments.add_argument('-d', '--days', help = 'Mean number of days before transmissions', required = False, type = positive_integer, default = 7)
-    arguments.add_argument('-r', '--rate', help = 'Expected subs/site/year', required = False, type = nn_float, default = 0.0007)
+    arguments.add_argument('-d', '--days', help = 'Mean number of days before transmissions', required = False, type = nn_float, default = 7)
+    arguments.add_argument('-r', '--rate', help = 'Expected subs/site/year', required = False, type = float01, default = 0.0007)
     arguments.add_argument('-l', '--lineages', help = 'Starting lineages', required = False, type = positive_integer, default = 10)
-    arguments.add_argument('-p', '--split', help = 'Initiate lineages at this rate', required = False, type = nn_float, default = 0.02)
+    arguments.add_argument('-p', '--split', help = 'Initiate lineages at this rate', required = False, type = float01, default = 0.02)
     arguments.add_argument('-m', '--random', help = 'Make random attachments at this rate', required = False, type = nn_float, default = 0.2)
     arguments.add_argument('-u', '--subset', help = 'Subsample this many sequences', required = False, type = positive_integer)
     arguments.add_argument('-b', '--bias', help = 'Bias subsamples to link to already sampled nodes', required = False, type = nn_float, default = 0.0)
-    arguments.add_argument('-y', '--sampling', help = 'Mean number of days before samplin', required = False, type = positive_integer, default = 30)
+    arguments.add_argument('-y', '--sampling', help = 'Mean number of days before sampling', required = False, type = positive_integer, default = 30)
+    arguments.add_argument('-x', '--burst', help = 'Mean (poisson) number of individuals infected at a given date', required = False, type = nn_float, default = None)
 
     settings = arguments.parse_args()
     
     ambig_remover = str.maketrans ("RYSWKMBDHVN-",
-                                   "ACCAGACAAAA-")
+                                   "ACCAGACAAAAA")
     
     with open (settings.sequences, "r") as fh:
         sequences =  [str(record.seq).translate (ambig_remover)[0:1212] for record in SeqIO.parse (fh, "fasta")]
@@ -63,24 +70,25 @@ if __name__=='__main__':
         
     random_network = transmission_network ()
 
-    start_nodes = random_network.create_a_pref_attachment_network (network_size = settings.size, start_with = settings.lineages, random_attachment = settings.random, start_new_tree = settings.split, start_date = datetime.datetime (1996,1,1), tick_rate = settings.days)
+    start_nodes = random_network.create_a_pref_attachment_network (network_size = settings.size, start_with = settings.lineages, random_attachment = settings.random, start_new_tree = settings.split, start_date = datetime.datetime (1996,1,1), tick_rate = settings.days, poisson_mean = settings.burst)
     #def sample_from_network (self, how_many_nodes = 100, how_many_edges = None, node_sampling_bias = 0.0):
 
     if settings.subset is not None: 
         subset_network = random_network.sample_from_network (settings.subset,node_sampling_bias = settings.bias)
-        describe_network (subset_network)
-        given_degrees = subset_network.get_node_degree_list ()
     else:
-        describe_network (random_network)
-        given_degrees = random_network.get_node_degree_list ()
+        subset_network = random_network
         
+    describe_network (subset_network)
+    given_degrees = subset_network.get_node_degree_list ()
+        
+    #sys.exit (0)
     
     #describe_network (random_network)
     print ("Sampling sequences...", file = sys.stderr)
     seqs = random.sample (sequences, len (start_nodes))
     
     random_network.simulate_sequence_evolution (start_nodes, seqs, settings.rate, settings.sampling)
-    random_network.dump_as_fasta (settings.fasta, filter_on_set = subset_network.nodes if settings.subset is not None else None)
+    random_network.dump_as_fasta (settings.fasta, add_dates = False, filter_on_set = subset_network.nodes if settings.subset is not None else None)
     
     #def sample_from_network (self, how_many_nodes = 100, how_many_edges = None, node_sampling_bias = 0.0):
      
@@ -94,9 +102,17 @@ if __name__=='__main__':
         
     describe_network (recovered_network)
     recovered_degrees = recovered_network.get_node_degree_list ()
+    
+    pairs = [[given_degrees[n] if n in given_degrees else 0, recovered_degrees[n] if n in recovered_degrees else 0] for n in subset_network.nodes]
+    
+    #for n in subset_network.nodes:
+    #    print ("%d %d" % ()) 
     #print ("\n\n", recovered_degrees)
-    
-    
+    try:
+        import scipy.stats.mstats
+        print (scipy.stats.mstats.kendalltau ([k[0] for k in pairs], [k[1] for k in pairs]))
+    except:
+        pass
     
         
     

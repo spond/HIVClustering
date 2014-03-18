@@ -14,6 +14,7 @@ if __name__=='__main__':
      
     
     network = build_a_network ()
+    
     with open (settings().sequences, 'r') as fh:
         sequences = {}
         for record in SeqIO.parse (fh, "fasta"):
