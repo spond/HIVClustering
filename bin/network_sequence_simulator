@@ -103,7 +103,17 @@ if __name__=='__main__':
     describe_network (recovered_network)
     recovered_degrees = recovered_network.get_node_degree_list ()
     
-    pairs = [[given_degrees[n] if n in given_degrees else 0, recovered_degrees[n] if n in recovered_degrees else 0] for n in subset_network.nodes]
+    degree_distros = [subset_network.get_degree_distribution(),recovered_network.get_degree_distribution()]
+    for dd in degree_distros:
+        all = sum(dd)
+        dd.insert (0, 0)
+        total = 0
+        for i, v in enumerate (dd):
+            total += dd[i]
+            dd[i] = total/all
+        #print (dd)
+    
+    pairs = [[degree_distros[0][given_degrees[n] if n in given_degrees else 0], degree_distros[1][recovered_degrees[n] if n in recovered_degrees else 0]] for n in subset_network.nodes]
     
     #for n in subset_network.nodes:
     #    print ("%d %d" % ()) 
