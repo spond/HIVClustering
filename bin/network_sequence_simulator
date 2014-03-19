@@ -152,6 +152,7 @@ if __name__=='__main__':
     if len (kendall_p_values) > 0:
         print ("Non-parametric correlation")
         print (describe_vector (kendall_p_values))
+        print ("Counts below 0.05: %d" % len ([k for k in kendall_p_values if k < 0.05]))
     
     if len (ppv) > 0:
         print ("PPV")
