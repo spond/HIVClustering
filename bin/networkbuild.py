@@ -137,17 +137,21 @@ def describe_network (network, json_output = False):
 
     print ("Fitting the degree distribution to various densities", file = sys.stderr)
     distro_fit = network.fit_degree_distribution ()
+    ci = distro_fit['rho_ci'][distro_fit['Best']]
+    rho = distro_fit['rho'][distro_fit['Best']]
+    rho = rho if rho is not None else 0.
+    ci = ci if ci is not None else [0.,0.]
     if json_output:
         return_json ['Degrees'] = {'Distribution' : distro_fit['degrees'],
                                    'Model': distro_fit['Best'],
-                                   'rho' : distro_fit['rho'][distro_fit['Best']],
-                                   'rho CI': distro_fit['rho_ci'][distro_fit['Best']],
+                                   'rho' : rho,
+                                   'rho CI': ci,
                                    'fitted': distro_fit['fitted'][distro_fit['Best']] }
     else:
         #print (distro_fit)
         ci = distro_fit['rho_ci'][distro_fit['Best']]
         rho = distro_fit['rho'][distro_fit['Best']]
-        print ("Best distribution is '%s' with rho = %g %s" % (distro_fit['Best'], rho if rho is not None else 0., ("[%g - %g]" % (ci[0], ci[1])) if ci is not None else ''))
+        print ("Best distribution is '%s' with rho = %g %s" % (distro_fit['Best'], rho, ("[%g - %g]" % (ci[0], ci[1]))))
 
     # find diffs in directed edges
     '''for anEdge in network.edges:

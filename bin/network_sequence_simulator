@@ -5,6 +5,7 @@ import csv
 import os.path
 import hashlib
 import subprocess
+from math import sqrt
 
 def positive_integer (value):
     ivalue = int(value)
@@ -30,10 +31,13 @@ from Bio import SeqIO
 from hivclustering import *
 from networkbuild import *
 
+def mcc (m):
+    return (m[1][1]*m[0][0] - m[1][0]*m[0][1])/sqrt ((m[1][1] + m[0][1])*(m[1][1] + m[1][0])*(m[0][0] + m[0][1])*(m[0][0] + m[1][0]))
+
 def run_tn93 (in_path, out_path):
 
     try:
-        subprocess.check_call (['/usr/local/bin/tn93', '-t', str(0.015), '-o', out_path, in_path]) 
+        subprocess.check_call (['/usr/local/bin/tn93', '-q', '-t', str(0.015), '-o', out_path, in_path]) 
     except subprocess.CalledProcessError as e:
         print ('ERROR: tn93 call failed',e,file = sys.stderr)
     
@@ -55,7 +59,9 @@ if __name__=='__main__':
     arguments.add_argument('-b', '--bias', help = 'Bias subsamples to link to already sampled nodes', required = False, type = nn_float, default = 0.0)
     arguments.add_argument('-y', '--sampling', help = 'Mean number of days before sampling', required = False, type = positive_integer, default = 30)
     arguments.add_argument('-x', '--burst', help = 'Mean (poisson) number of individuals infected at a given date', required = False, type = nn_float, default = None)
+    arguments.add_argument('-e', '--replicates', help = 'Simulate this many replicates', required = False, type = positive_integer, default = 1)
 
+    
     settings = arguments.parse_args()
     
     ambig_remover = str.maketrans ("RYSWKMBDHVN-",
@@ -68,64 +74,88 @@ if __name__=='__main__':
 
     print ("Read %d sequences " % len(sequences))
         
-    random_network = transmission_network ()
-
-    start_nodes = random_network.create_a_pref_attachment_network (network_size = settings.size, start_with = settings.lineages, random_attachment = settings.random, start_new_tree = settings.split, start_date = datetime.datetime (1996,1,1), tick_rate = settings.days, poisson_mean = settings.burst)
-    #def sample_from_network (self, how_many_nodes = 100, how_many_edges = None, node_sampling_bias = 0.0):
-
-    if settings.subset is not None: 
-        subset_network = random_network.sample_from_network (settings.subset,node_sampling_bias = settings.bias)
-    else:
-        subset_network = random_network
+    kendall_p_values = []
+    ppv              = []
         
-    describe_network (subset_network)
-    given_degrees = subset_network.get_node_degree_list ()
+    for replicate in range (settings.replicates): 
+        print ("##### REPLICATE %d #####" % (replicate+1))  
+        random_network = transmission_network ()
+
+        start_nodes = random_network.create_a_pref_attachment_network (network_size = settings.size, start_with = settings.lineages, random_attachment = settings.random, start_new_tree = settings.split, start_date = datetime.datetime (1996,1,1), tick_rate = settings.days, poisson_mean = settings.burst)
+        #def sample_from_network (self, how_many_nodes = 100, how_many_edges = None, node_sampling_bias = 0.0):
+
+        if settings.subset is not None: 
+            subset_network = random_network.sample_from_network (settings.subset,node_sampling_bias = settings.bias)
+        else:
+            subset_network = random_network
         
-    #sys.exit (0)
+        json1 = describe_network (random_network, json_output = True)
+        print ("Nodes %d, edges %d, clusters %d, distro %s, rho %g" % 
+                (json1['Network Summary']['Nodes'],json1['Network Summary']['Edges'],json1['Network Summary']['Clusters'],json1['Degrees']['Model'], json1['Degrees']['rho']))
+                
+        given_degrees = random_network.get_node_degree_list ()
+        
+        #sys.exit (0)
     
-    #describe_network (random_network)
-    print ("Sampling sequences...", file = sys.stderr)
-    seqs = random.sample (sequences, len (start_nodes))
+        #describe_network (random_network)
+        print ("Sampling sequences...", file = sys.stderr)
+        seqs = random.sample (sequences, len (start_nodes))
     
-    random_network.simulate_sequence_evolution (start_nodes, seqs, settings.rate, settings.sampling)
-    random_network.dump_as_fasta (settings.fasta, add_dates = False, filter_on_set = subset_network.nodes if settings.subset is not None else None)
+        random_network.simulate_sequence_evolution (start_nodes, seqs, settings.rate, settings.sampling)
+        random_network.dump_as_fasta (settings.fasta, add_dates = False, filter_on_set = subset_network.nodes if settings.subset is not None else None)
     
-    #def sample_from_network (self, how_many_nodes = 100, how_many_edges = None, node_sampling_bias = 0.0):
+        #def sample_from_network (self, how_many_nodes = 100, how_many_edges = None, node_sampling_bias = 0.0):
      
     
-    #print ("\n\n", given_degrees)
-    run_tn93 (settings.fasta.name, settings.tn93)
+        #print ("\n\n", given_degrees)
+        run_tn93 (settings.fasta.name, settings.tn93)
     
-    recovered_network = transmission_network ()
-    with open (settings.tn93) as fh:
-        recovered_network.read_from_csv_file (fh, parsePlain, 0.015, 'BULK')
+        recovered_network = transmission_network ()
+        with open (settings.tn93) as fh:
+            recovered_network.read_from_csv_file (fh, parsePlain, 0.015, 'BULK')
         
-    describe_network (recovered_network)
-    recovered_degrees = recovered_network.get_node_degree_list ()
+        json2 = describe_network (recovered_network, json_output = True)
+        print ("Nodes %d, edges %d, clusters %d, distro %s, rho %g" % 
+                (json2['Network Summary']['Nodes'],json2['Network Summary']['Edges'],json2['Network Summary']['Clusters'],json2['Degrees']['Model'], json2['Degrees']['rho']))
+        recovered_degrees = recovered_network.get_node_degree_list ()
     
-    degree_distros = [subset_network.get_degree_distribution(),recovered_network.get_degree_distribution()]
-    for dd in degree_distros:
-        all = sum(dd)
-        dd.insert (0, 0)
-        total = 0
-        for i, v in enumerate (dd):
-            total += dd[i]
-            dd[i] = total/all
-        #print (dd)
+        degree_distros = [json1['Degrees']['fitted'],json2['Degrees']['fitted']]
+        for dd in degree_distros:
+            dd.insert (0, 0)
+            total = 0
+            for i, v in enumerate (dd):
+                total += v
+                dd[i] = total
+            #print (dd)
     
-    pairs = [[degree_distros[0][given_degrees[n] if n in given_degrees else 0], degree_distros[1][recovered_degrees[n] if n in recovered_degrees else 0]] for n in subset_network.nodes]
-    
-    #for n in subset_network.nodes:
-    #    print ("%d %d" % ()) 
-    #print ("\n\n", recovered_degrees)
-    try:
-        import scipy.stats.mstats
-        print (scipy.stats.mstats.kendalltau ([k[0] for k in pairs], [k[1] for k in pairs]))
-    except:
-        pass
-    
+        pairs = [[degree_distros[0][given_degrees[n] if n in given_degrees else 0], degree_distros[1][recovered_degrees[n] if n in recovered_degrees else 0]] for n in recovered_network.nodes]
         
+        agreement_table = [[0,0],[0,0]]
+        for p in pairs:
+            #print (p)
+            i1 = 1 if p[0] >= 0.75 else 0
+            i2 = 1 if p[1] >= 0.75 else 0
+            agreement_table[i1][i2] += 1
+            
+        lppv = agreement_table[1][1] / (agreement_table[1][1]+agreement_table[0][1])
+        #print (agreement_table, mcc (agreement_table), lppv)
+        print ("PPV %g" % lppv)
+        ppv.append (lppv)
+        try:
+            import scipy.stats.mstats
+            corr = scipy.stats.mstats.kendalltau ([k[0] for k in pairs], [k[1] for k in pairs])
+            kendall_p_values.append (corr[1])
+            print ("Kendall p-value %g" % corr[1])
+        except:
+            pass
     
+    if len (kendall_p_values) > 0:
+        print ("Non-parametric correlation")
+        print (describe_vector (kendall_p_values))
+    
+    if len (ppv) > 0:
+        print ("PPV")
+        print (describe_vector (ppv))
     
    
 
