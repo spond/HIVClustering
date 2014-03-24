@@ -53,3 +53,8 @@ if __name__=='__main__':
 
     else:
         describe_network (network)
+        
+        if settings().dot is not None:
+            network.generate_dot (settings().dot)
+        if settings().cluster is not None:
+            network.write_clusters (settings().cluster)

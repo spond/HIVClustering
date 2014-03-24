@@ -1369,8 +1369,13 @@ class transmission_network:
     def write_clusters (self, file):
         file.write ("SequenceID,ClusterID\n")
         for node in self.nodes:
-            if node.cluster_id != None:
-                file.write ("%s,%d\n" % (self.sequence_ids[self.make_sequence_key (node.id, node.dates[0])],node.cluster_id))
+            if node.cluster_id is not None:
+                for d in node.dates:
+                    try:
+                        file.write ("%s,%d\n" % (self.sequence_ids[self.make_sequence_key (node.id, d)],node.cluster_id))
+                        break
+                    except KeyError: 
+                        pass
 
 
     def reduce_edge_set (self, attribute_merge = True):

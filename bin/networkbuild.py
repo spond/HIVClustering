@@ -314,9 +314,7 @@ def build_a_network ():
             print ("Failed to open '%s' for reading" % (run_settings.input), file = sys.stderr)
             raise
 
-    if run_settings.dot == None:
-        run_settings.dot = sys.stdout
-    else:
+    if run_settings.dot is not None:
         try:
             run_settings.dot = open (run_settings.dot, 'w')
         except IOError:
