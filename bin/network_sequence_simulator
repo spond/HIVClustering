@@ -77,6 +77,8 @@ if __name__=='__main__':
     kendall_p_values = []
     ppv              = []
         
+    sys.setrecursionlimit(max(sys.getrecursionlimit(),settings.size))
+
     for replicate in range (settings.replicates): 
         print ("##### REPLICATE %d #####" % (replicate+1))  
         random_network = transmission_network ()
