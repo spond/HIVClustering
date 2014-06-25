@@ -9,6 +9,20 @@ replicates = 100
 expected_stats = {'edges' : 540, 'nodes': 339, 'clusters' : 90}
 
 
+#-------------------------------------------------------------------------------		
+
+def get_dot_deg (self, year_vis = None):
+
+
+    shape = 'circle'
+    color = 'white'
+ 
+    color = 1 + min (8, self.degree//2)
+ 
+    return '"%s" [label = "", fillcolor = "/greys9/%d", shape = %s];\n' % (self.id , color, shape)
+
+    
+    
 def describe_network (network):
     network_stats = network.get_edge_node_count ()
     print ("%d edges on %d nodes" % (network_stats['edges'], network_stats['nodes']))
@@ -34,7 +48,23 @@ print ("\t".join(["Size","Bias","MeanEdges","MeanNodes","MeanClusters","P"]))
 
 bias = 0
 
+patient.get_dot_string = get_dot_deg
+
+
 random.seed()
+sfn = transmission_network()
+sfn.create_a_pref_attachment_network (200)
+
+with open ("results/sf.dot", "w") as fh:
+    sfn.generate_dot (fh)
+
+rn = transmission_network()
+rn.create_a_random_network (200)
+with open ("results/rn.dot", "w") as fh:
+    rn.generate_dot (fh)
+
+sys.exit (1)
+
 
 for int_bias in range (50,51,5):
     bias = int_bias/100.

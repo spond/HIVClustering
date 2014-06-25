@@ -508,7 +508,7 @@ class patient:
 
         shape = 'ellipse'
         color = 'white'
-        label = str(get_vl()) if self.get_vl() is not None else ""
+        label = str(self.get_vl()) if self.get_vl() is not None else ""
 
         edi_info = self.get_treatment_since_edi()
 
