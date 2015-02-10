@@ -4,35 +4,55 @@ import json
 import csv
 import os.path
 import hashlib
+import re
+import random
+
 from Bio import SeqIO
 
 
 from hivclustering import *
 from networkbuild import *
 
+trailing_n = re.compile ("[nN]+$")
+
+random_tags = range (1,100000,3)
+
 if __name__=='__main__':
-     
-    
+      
     network = build_a_network ()
+    seqs_by_id = {}
     
     with open (settings().sequences, 'r') as fh:
         sequences = {}
         for record in SeqIO.parse (fh, "fasta"):
-            sequences[record.id] = str (record.seq)
+            #sequences[record.id] = str (record.seq)
             
+            bits = parseAEH (record.id)[0]
+            if bits ['id'] not in seqs_by_id or seqs_by_id[bits['id']][0] > bits['date']:
+                seqs_by_id[bits['id']] = [bits['date'], str (record.seq)]
+            
+    #print (len(seqs_by_id))
+    random_ids = random.sample (random_tags, len(seqs_by_id))
     
     already_done = set ()
+    table_recs = []
     
-    for seq_id, seq_tag in network.sequence_ids.items():
-        seq_parts = seq_id.split ('|')
-        year = seq_parts[1].split ('-')[2]
-        if seq_parts[0] in already_done:
-            continue
-        
-        m = hashlib.md5()
-        already_done.add (seq_parts[0])
-        m.update (seq_parts[0].encode ('utf-8'))
-        print (">%s_US_%s\n%s" %(m.hexdigest()[0:10],year,sequences[seq_tag]))
+    for seq_id, seq_data in seqs_by_id.items():
+        year = seq_data[0].tm_year
         
         
-
+        no_gap_seq = seq_data[1][0:1212].replace ('-', '')
+        no_gap_seq = trailing_n.sub ('', no_gap_seq)
+        anon_id    = "SD_PIRC_%d" % random_ids.pop()
+        
+        table_recs.append (['>Feature', anon_id])
+        table_recs.append (['<1', '>%d' % len (no_gap_seq), 'gene'])
+        table_recs.append (['', '', '', 'gene', 'pol'])
+        table_recs.append (['', '', '', 'note', 'includes full protease and partial reverse transcriptase'])
+        table_recs.append (['<1', '>%d' % len (no_gap_seq), 'CDS'])
+        table_recs.append (['', '', '', 'product', 'pol protein'])
+        
+        
+        print ('>%s [isolate = %s] [country = USA] [organism = "Human immunodeficiency virus 1"] [collection-date = "%s"] [moltype = "Linear RNA"] \n%s' %(anon_id,anon_id,year,no_gap_seq))
+        
+print ('\n'.join (['\t'.join (k) for k in table_recs]))

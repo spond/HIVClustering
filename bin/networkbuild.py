@@ -63,7 +63,7 @@ def print_degree_distro (network,distro_fit, outfile = sys.stdout):
 
 
 #-------------------------------------------------------------------------------
-def describe_network (network, json_output = False):
+def describe_network (network, json_output = False, keep_singletons = False):
     network_stats = network.get_edge_node_count ()
     if json_output:
         return_json = {'Network Summary' : {'Edges' : network_stats['edges'], 'Nodes': network_stats['nodes'],
@@ -75,7 +75,7 @@ def describe_network (network, json_output = False):
     else:
         print ("%d edges on %d nodes" % (network_stats['edges'], network_stats['nodes']), file = sys.stderr)
 
-    network.compute_clusters()
+    network.compute_clusters(keep_singletons)
     clusters = network.retrieve_clusters()
     #print (describe_vector([len(clusters[c]) for c in clusters]))
 
@@ -297,6 +297,7 @@ def build_a_network ():
     arguments.add_argument('-p', '--parser', help = 'The reg.exp pattern to split up sequence ids; only used if format is regexp', required = False, type = str)
     arguments.add_argument('-a', '--attributes',   help = 'Load a CSV file with optional node attributes', type = argparse.FileType('r'))
     arguments.add_argument('-j', '--json', help = 'Output the network report as a JSON object', required = False,  action = 'store_true', default = False)
+    arguments.add_argument('-o', '--singletons', help = 'Include singletons in JSON output', required = False,  action = 'store_true', default = False)
     arguments.add_argument('-k', '--filter', help = 'Only return clusters with ids listed by a newline separated supplied file. ', required = False)
     arguments.add_argument('-s', '--sequences', help = 'Provide the MSA with sequences which were used to make the distance file. ', required = False)
     arguments.add_argument('-n', '--edge_filtering', choices = ['remove','report'] , help = 'Compute edge support and mark edges for removal using sequence-based triangle tests (requires the -s argument) and either only report them or remove the edges before doing other analyses ', required = False)

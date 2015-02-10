@@ -20,7 +20,7 @@ if __name__=='__main__':
 
     if settings().json:
 
-        network_info = describe_network (network, True)
+        network_info = describe_network (network, True, settings().singletons)
         nodes = []
 
         cluster_info = network.retrieve_clusters ()
@@ -31,6 +31,8 @@ if __name__=='__main__':
             for n in cluster:
                if idx is not None:
                    nodes.append ({'id': n.id, 'cluster' : idx, 'attributes': list (n.attributes), 'edi': n.get_edi(), 'baseline': n.get_baseline_date(True)}) 
+               if idx is None:
+                   print (n, file = sys.stderr)
                node_idx [n] = len (nodes)-1
         
         edges = []
